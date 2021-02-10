@@ -286,8 +286,6 @@ void workspace_t::insert_tiled_node(owned_node_t node) {
     node->set_wsid(wsid);
     auto parent = get_active_parent_node();
 
-    LOGD("active parent node: ", parent);
-
     parent->insert_child(std::move(node));
 }
 
@@ -318,6 +316,9 @@ owned_node_t workspace_t::remove_node(node_t node) {
 }
 
 void workspace_t::insert_child(owned_node_t node) {
+    node->set_floating(false);
+    node->set_wsid(wsid);
+
     tiled_root->insert_child(std::move(node));
 }
 
@@ -471,23 +472,19 @@ void swayfire_t::init() {
 
     workspaces.update_dims(grid_dims, output->workspace->get_workarea());
 
-    for (int32_t x = 0; x < grid_dims.width; x++) {
-        for (int32_t y = 0; y < grid_dims.height; y++) {
-            wf::point_t wsid = {x, y};
-            auto &ws = workspaces.get(wsid);
+    workspaces.for_each([&](auto &ws) {
+        LOGD("Populating ", ws.to_string());
+        auto views = 
+            output->workspace->get_views_on_workspace(ws.wsid, wf::ALL_LAYERS);
 
-            auto views = output->workspace->get_views_on_workspace(wsid,
-                    wf::LAYER_WORKSPACE);
+        for (auto view : views)
+            if (view->role == wf::VIEW_ROLE_TOPLEVEL)
+                ws.insert_tiled_node(init_view_node(view));
+    });
 
-            for (auto view : views)
-                if (view->role == wf::VIEW_ROLE_TOPLEVEL)
-                    ws.insert_floating_node(init_view_node(view));
-        }
-
-        if (auto active_view = output->get_active_view()) {
-            auto wsid = output->workspace->get_current_workspace();
-            workspaces.get(wsid).active_node = active_view->get_data<view_data_t>()->node;
-        }
+    if (auto active_view = output->get_active_view()) {
+        auto wsid = output->workspace->get_current_workspace();
+        workspaces.get(wsid).active_node = active_view->get_data<view_data_t>()->node;
     }
 
     bind_signals();
@@ -501,7 +498,7 @@ void swayfire_t::fini() {
     unbind_signals();
 
     if (!is_shutting_down()) {
-        auto views = output->workspace->get_views_in_layer(wf::LAYER_WORKSPACE);
+        auto views = output->workspace->get_views_in_layer(wf::ALL_LAYERS);
 
         for (auto view : views)
             fini_view(view);
