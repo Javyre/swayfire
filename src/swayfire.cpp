@@ -346,6 +346,11 @@ owned_node_t workspace_t::swap_child(node_t node, owned_node_t other) {
     }
 }
 
+void workspace_t::set_workarea(wf::geometry_t geo) {
+    geometry = geo;
+    tiled_root->set_geometry(geo);
+}
+
 void workspace_t::toggle_tile_node(node_t node) {
     LOGD("toggling tiling for ", node);
 
@@ -393,6 +398,12 @@ workspace_t &workspaces_t::get(wf::point_t ws) {
     return workspaces.at(ws.x).at(ws.y);
 }
 
+void workspaces_t::for_each(std::function<void(workspace_t &)> fun) {
+    for (auto &col : workspaces)
+        for (auto &ws : col)
+            fun(ws);
+}
+
 // swayfire_t
 
 std::unique_ptr<view_node_t> init_view_node(wayfire_view view) {
@@ -425,9 +436,11 @@ void swayfire_t::bind_signals() {
     output->connect_signal("view-layer-attached", &on_view_attached);
     output->connect_signal("view-unmapped", &on_view_unmapped);
     output->connect_signal("view-focused", &on_view_focused);
+    output->connect_signal("workarea-changed", &on_workarea_changed);
 }
 
 void swayfire_t::unbind_signals() {
+    output->disconnect_signal(&on_workarea_changed);
     output->disconnect_signal(&on_view_focused);
     output->disconnect_signal(&on_view_unmapped);
     output->disconnect_signal(&on_view_attached);

@@ -177,7 +177,7 @@ struct workspace_t : public node_parent_interface_t {
     virtual owned_node_t remove_child(node_t node);
     virtual owned_node_t swap_child(node_t node, owned_node_t other);
 
-
+    void set_workarea(wf::geometry_t geo);
     virtual wf::geometry_t get_geometry() { return geometry; }
 
     virtual std::string to_string() const {
@@ -194,6 +194,8 @@ struct workspaces_t {
     void update_dims(wf::dimensions_t ndims, wf::geometry_t geo);
 
     workspace_t &get(wf::point_t ws);
+
+    void for_each(std::function<void(workspace_t &)> fun);
 };
 
 class swayfire_workspace_implementation_t : public wf::workspace_implementation_t {
@@ -277,6 +279,13 @@ class swayfire_t : public wf::plugin_interface_t {
 
                 workspaces.get(node->get_wsid()).active_node = node;
             }
+        };
+
+        wf::signal_connection_t on_workarea_changed = [&](wf::signal_data_t *data) {
+            auto wcdata = static_cast<wf::workarea_changed_signal *>(data);
+            workspaces.for_each([&](auto &ws) {
+                ws.set_workarea(wcdata->new_workarea);
+            });
         };
 
         void fini_view(wayfire_view view);
