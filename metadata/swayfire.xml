@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<wayfire>
+	<plugin name="swayfire">
+	<_short>Swayfire</_short>
+	<_long>Tiling window manager inspired by Sway</_long>
+	<category>Window Management</category>
+	<!-- <option name="transient_output" type="string"> -->
+	<!-- 	<_short>Transient output</_short> -->
+	<!-- 	<default>HDMI-A-2</default> -->
+	<!-- </option> -->
+    <option name="key_toggle_tile" type="key">
+        <_short>Toggle tile</_short>
+        <_long>Toggle tiling current window</_long>
+        <default>&lt;super&gt; KEY_T</default>
+    </option>
+    <option name="key_toggle_split_direction" type="key">
+        <_short>Toggle split direction</_short>
+        <_long>Toggle split direction</_long>
+        <default>&lt;super&gt; KEY_E</default>
+    </option>
+	</plugin>
+</wayfire>
