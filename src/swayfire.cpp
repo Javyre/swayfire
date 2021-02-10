@@ -6,6 +6,41 @@
 #include <wayfire/geometry.hpp>
 #include <wayfire/util/log.hpp>
 
+// nonwf
+
+// TODO: use wf::get_view_main_workspace once we upgrade to wayfire > 0.7
+wf::point_t nonwf::get_view_workspace(wayfire_view view, output_ref_t output)
+{
+    auto og = output->get_screen_size();
+
+    auto wm = view->transform_region(view->get_wm_geometry());
+    auto x = (int)std::floor((wm.x + wm.width / 2.0) / og.width);
+    auto y = (int)std::floor((wm.y + wm.height / 2.0) / og.height);
+
+    auto dims = output->workspace->get_workspace_grid_size();
+    auto curr = output->workspace->get_current_workspace();
+
+    // convert relative coords to nearest absolute wsid coords
+    x = std::clamp(x + curr.x, 0, dims.width-1);
+    y = std::clamp(y + curr.y, 0, dims.height-1);
+
+    return {x, y};
+}
+
+wf::geometry_t nonwf::local_to_relative_geometry(
+        wf::geometry_t geo,
+        wf::point_t wsid,
+        output_ref_t output) {
+
+    auto og = output->get_screen_size();
+    auto curr = output->workspace->get_current_workspace();
+
+    geo.x += og.width * (wsid.x - curr.x);
+    geo.y += og.height * (wsid.y - curr.y);
+
+    return geo;
+}
+
 // node_parent_interface_t
 
 split_node_ref_t node_parent_interface_t::as_split_node() {
@@ -15,6 +50,9 @@ split_node_ref_t node_parent_interface_t::as_split_node() {
 // view_node_t
 
 void view_node_t::set_floating(bool fl) {
+    if (!floating && fl)
+        view->request_native_size();
+
     floating = fl;
     view->set_tiled(fl ? 0 : wf::TILED_EDGES_ALL);
 }
@@ -24,9 +62,8 @@ void view_node_t::set_wsid(wf::point_t wsid) {
 }
 
 void view_node_t::set_geometry(wf::geometry_t geo) {
-    LOGD("new view node geo: ", geo);
     geometry = geo;
-    view->set_geometry(geo);
+    view->set_geometry(nonwf::local_to_relative_geometry(geo, wsid, output));
 }
 
 /* node_t view_node_t::deepest_active_node() { */
@@ -35,7 +72,7 @@ void view_node_t::set_geometry(wf::geometry_t geo) {
 
 node_parent_t view_node_t::get_active_parent_node() {
     if (prefered_split_type) {
-        auto new_parent = std::make_unique<split_node_t>(get_geometry());
+        auto new_parent = std::make_unique<split_node_t>(get_geometry(), output);
         auto new_parent_ref = new_parent.get();
         new_parent->split_type = *prefered_split_type;
         auto owned_self = parent->swap_child(this, std::move(new_parent));
@@ -274,6 +311,7 @@ owned_node_t workspace_t::swap_floating_node(node_t node, owned_node_t other) {
     }
 
     other->set_floating(true);
+    other->set_wsid(wsid);
     other->set_geometry((*child)->get_geometry());
 
     (*child).swap(other);
@@ -300,7 +338,7 @@ owned_node_t workspace_t::remove_tiled_node(node_t node) {
         owned_node = parent->remove_child(node);
     } else if (node.get() == tiled_root.get()) {
         owned_node = std::move(tiled_root);
-        tiled_root = std::make_unique<split_node_t>(geometry);
+        tiled_root = std::make_unique<split_node_t>(geometry, output);
     } else {
         LOGE("Node not tiled in ", this, ": ", node);
         return nullptr;
@@ -323,17 +361,23 @@ void workspace_t::insert_child(owned_node_t node) {
 }
 
 owned_node_t workspace_t::remove_child(node_t node) {
+    owned_node_t ret;
+
     if (node->get_floating()) {
         // floating nodes are always direct children of the workspace
-        return remove_floating_node(node);
+        ret = remove_floating_node(node);
     } else if (node.get() == tiled_root.get()) {
-        auto ret = std::move(tiled_root);
-        tiled_root = std::make_unique<split_node_t>(geometry);
-        return ret;
+        ret = std::move(tiled_root);
+        tiled_root = std::make_unique<split_node_t>(geometry, output);
     } else {
         LOGE("Node is not a direct child of ", this, ": ", node);
         return nullptr;
     }
+
+    if (node.get() == active_node.get())
+        active_node = tiled_root;
+
+    return ret;
 }
 
 owned_node_t workspace_t::swap_child(node_t node, owned_node_t other) {
@@ -378,7 +422,12 @@ void workspace_t::toggle_split_direction_node(node_t node) {
 
 // workspaces_t
 
-void workspaces_t::update_dims(wf::dimensions_t ndims, wf::geometry_t geo) {
+void workspaces_t::update_dims(
+        wf::dimensions_t ndims,
+        wf::geometry_t geo,
+        output_ref_t output
+        ) {
+
     workspaces.resize(ndims.width);
 
     auto x = 0;
@@ -388,7 +437,7 @@ void workspaces_t::update_dims(wf::dimensions_t ndims, wf::geometry_t geo) {
         } else if (col.size() < (uint32_t)ndims.height) {
             col.reserve(ndims.height);
             for (int32_t y = col.size(); y < ndims.height; y++) {
-                col.push_back(workspace_t({x, y}, geo));
+                col.push_back(workspace_t({x, y}, geo, output));
             }
         } else {
             col.erase(col.begin()+ndims.height, col.end());
@@ -409,13 +458,11 @@ void workspaces_t::for_each(std::function<void(workspace_t &)> fun) {
 
 // swayfire_t
 
-std::unique_ptr<view_node_t> init_view_node(wayfire_view view) {
-    LOGD("initializing node for view: ", view->to_string());
-
-    auto node = std::make_unique<view_node_t>(view);
+std::unique_ptr<view_node_t> swayfire_t::init_view_node(wayfire_view view) {
+    auto node = std::make_unique<view_node_t>(view, output);
     view->store_data<view_data_t>(std::make_unique<view_data_t>(node));
 
-    LOGD("made node: ", node->to_string());
+    LOGD("New view-node for ", view->to_string(), ": ", node->to_string());
     return node;
 }
 
@@ -424,9 +471,9 @@ void swayfire_t::fini_view(wayfire_view view) {
         auto vdata = view->get_data<view_data_t>();
         auto node = vdata->node;
 
-        LOGD("unmapping node from ws: ", node->get_wsid());
+        LOGD("Fini for: ", node);
 
-        auto owned_node = workspaces.get(node->get_wsid()).remove_node(node);
+        auto owned_node = node->parent->remove_child(node);
         auto vnode = static_cast<view_node_t *>(owned_node.release());
         vnode->view->erase_data<view_data_t>();
 
@@ -470,21 +517,23 @@ void swayfire_t::init() {
 
     auto grid_dims = output->workspace->get_workspace_grid_size();
 
-    workspaces.update_dims(grid_dims, output->workspace->get_workarea());
+    workspaces.update_dims(grid_dims, output->workspace->get_workarea(), output);
 
-    workspaces.for_each([&](auto &ws) {
-        LOGD("Populating ", ws.to_string());
-        auto views = 
-            output->workspace->get_views_on_workspace(ws.wsid, wf::ALL_LAYERS);
+    auto views = output->workspace->get_views_in_layer(wf::ALL_LAYERS);
 
-        for (auto view : views)
-            if (view->role == wf::VIEW_ROLE_TOPLEVEL)
-                ws.insert_tiled_node(init_view_node(view));
-    });
+    for (auto view : views) {
+        if (view->role == wf::VIEW_ROLE_TOPLEVEL) {
+            auto &ws = workspaces.get(nonwf::get_view_workspace(view, output));
+            ws.insert_tiled_node(init_view_node(view));
+        }
+    }
 
     if (auto active_view = output->get_active_view()) {
-        auto wsid = output->workspace->get_current_workspace();
-        workspaces.get(wsid).active_node = active_view->get_data<view_data_t>()->node;
+        if (auto vdata = active_view->get_data<view_data_t>()) {
+            auto node = vdata->node;
+
+            workspaces.get(node->get_wsid()).active_node = node;
+        }
     }
 
     bind_signals();

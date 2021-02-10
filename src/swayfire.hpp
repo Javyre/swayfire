@@ -19,6 +19,17 @@
 #include <wayfire/workspace-manager.hpp>
 #include <wayfire/signal-definitions.hpp>
 
+using output_ref_t = nonstd::observer_ptr<wf::output_t>;
+
+namespace nonwf {
+    wf::point_t get_view_workspace(wayfire_view view, output_ref_t output);
+
+    // Convert workspace-local geo to relative-to-current-workspace geo
+    wf::geometry_t local_to_relative_geometry(
+            wf::geometry_t geo,
+            wf::point_t wsid,
+            output_ref_t output);
+}
 
 enum struct split_type_t : uint8_t {
     VSPLIT, HSPLIT, TABBED, STACKED,
@@ -52,14 +63,18 @@ using node_parent_t = nonstd::observer_ptr<node_parent_interface_t>;
 
 static uint id_counter;
 
+class swayfire_t;
+
 class node_interface_t {
     protected:
         bool floating = false;
         wf::point_t wsid = {0, 0};
         wf::geometry_t geometry;
         uint node_id;
+        output_ref_t output;
 
-        node_interface_t() : node_id(id_counter) { id_counter++; }
+        node_interface_t(output_ref_t output)
+            : node_id(id_counter), output(output) { id_counter++; }
 
     public:
         /* split_node_ref_t parent; */
@@ -88,7 +103,8 @@ class view_node_t : public node_interface_t {
         wayfire_view view;
         std::optional<split_type_t> prefered_split_type;
 
-        view_node_t(wayfire_view view) : view(view) {}
+        view_node_t(wayfire_view view, output_ref_t output)
+            : node_interface_t(output), view(view) {}
 
         virtual void set_geometry(wf::geometry_t geo);
         virtual void set_floating(bool fl);
@@ -116,7 +132,8 @@ class split_node_t : public node_interface_t, public node_parent_interface_t {
         std::vector<float> children_ratios;
         std::vector<owned_node_t> children;
 
-        split_node_t(wf::geometry_t geo) { geometry = geo; }
+        split_node_t(wf::geometry_t geo, output_ref_t output)
+            : node_interface_t(output) { geometry = geo; }
 
         void insert_child_front(owned_node_t node);
         void insert_child_back(owned_node_t node);
@@ -145,12 +162,18 @@ struct workspace_t : public node_parent_interface_t {
     std::unique_ptr<split_node_t> tiled_root;
     std::vector<owned_node_t> floating_nodes;
     node_t active_node;
+    output_ref_t output;
 
-    workspace_t(wf::point_t wsid, wf::geometry_t geo) :
+    workspace_t(
+            wf::point_t wsid,
+            wf::geometry_t geo,
+            output_ref_t output
+        ) :
         wsid(wsid),
         geometry(geo),
-        tiled_root(std::make_unique<split_node_t>(geo)),
-        active_node(tiled_root) {};
+        tiled_root(std::make_unique<split_node_t>(geo, output)),
+        active_node(tiled_root),
+        output(output) {};
 
     workspace_t(workspace_t &) = delete;
     workspace_t(workspace_t &&) = default;
@@ -191,7 +214,10 @@ struct workspaces_t {
     // Workspace tree roots: workspaces[x][y]
     std::vector<std::vector<workspace_t>> workspaces;
 
-    void update_dims(wf::dimensions_t ndims, wf::geometry_t geo);
+    void update_dims(
+            wf::dimensions_t ndims, 
+            wf::geometry_t geo,
+            output_ref_t output);
 
     workspace_t &get(wf::point_t ws);
 
@@ -214,8 +240,6 @@ class swayfire_workspace_implementation_t : public wf::workspace_implementation_
             return false;
         }
 };
-
-std::unique_ptr<view_node_t> init_view_node(wayfire_view view);
 
 inline bool is_shutting_down() {
     return wf::get_core().get_current_state() == wf::compositor_state_t::SHUTDOWN;
@@ -285,10 +309,9 @@ class swayfire_t : public wf::plugin_interface_t {
             if (view->role != wf::VIEW_ROLE_TOPLEVEL)
                 return;
 
-            auto wsid = output->workspace->get_current_workspace();
-            auto &ws = workspaces.get(wsid);
+            auto &ws = workspaces.get(nonwf::get_view_workspace(view, output));
 
-            LOGD("attaching node in ws: ", wsid, ", ", view->to_string(),
+            LOGD("attaching node in ", ws.to_string(), ", ", view->to_string(),
                     " : ", view->get_title());
 
             ws.insert_tiled_node(init_view_node(view));
@@ -322,6 +345,7 @@ class swayfire_t : public wf::plugin_interface_t {
         void bind_keys();
         void unbind_keys();
 
+        std::unique_ptr<view_node_t> init_view_node(wayfire_view view);
     public:
         void init() override;
         void fini() override;
