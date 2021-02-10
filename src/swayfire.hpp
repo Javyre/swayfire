@@ -49,7 +49,6 @@ class node_parent_interface_t {
     public:
         split_node_ref_t as_split_node();
 
-        // virtual wf::geometry_t get_geometry() = 0;
         virtual void insert_child(owned_node_t node) = 0;
         virtual owned_node_t remove_child(node_t node) = 0;
         virtual owned_node_t swap_child(node_t node, owned_node_t other) = 0;
@@ -77,7 +76,6 @@ class node_interface_t {
             : node_id(id_counter), output(output) { id_counter++; }
 
     public:
-        /* split_node_ref_t parent; */
         node_parent_t parent;
 
         virtual wf::geometry_t get_geometry() { return geometry; }
@@ -90,7 +88,6 @@ class node_interface_t {
         wf::point_t get_wsid() { return wsid; };
         virtual void set_wsid(wf::point_t wsid) = 0;
 
-        /* virtual node_t deepest_active_node() = 0; */
         virtual node_parent_t get_active_parent_node() = 0;
 
         virtual ~node_interface_t() = default;
@@ -109,7 +106,6 @@ class view_node_t : public node_interface_t {
         virtual void set_geometry(wf::geometry_t geo);
         virtual void set_floating(bool fl);
         virtual void set_wsid(wf::point_t wsid);
-        /* virtual node_t deepest_active_node(); */
         virtual node_parent_t get_active_parent_node();
 
         virtual std::string to_string() const {
@@ -144,7 +140,6 @@ class split_node_t : public node_interface_t, public node_parent_interface_t {
         virtual void set_geometry(wf::geometry_t geo);
         virtual void set_floating(bool fl);
         virtual void set_wsid(wf::point_t wsid);
-        /* virtual node_t deepest_active_node(); */
         virtual node_parent_t get_active_parent_node();
         virtual owned_node_t swap_child(node_t node, owned_node_t other);
 

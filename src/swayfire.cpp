@@ -66,10 +66,6 @@ void view_node_t::set_geometry(wf::geometry_t geo) {
     view->set_geometry(nonwf::local_to_relative_geometry(geo, wsid, output));
 }
 
-/* node_t view_node_t::deepest_active_node() { */
-/*     return this; */
-/* } */
-
 node_parent_t view_node_t::get_active_parent_node() {
     if (prefered_split_type) {
         auto new_parent = std::make_unique<split_node_t>(get_geometry(), output);
@@ -178,8 +174,6 @@ owned_node_t split_node_t::swap_child(node_t node, owned_node_t other) {
 
 void split_node_t::set_floating(bool fl) {
     floating = fl;
-    /* for (auto &child : children) */
-    /*     child->set_floating(fl); */
 }
 
 void split_node_t::set_wsid(wf::point_t wsid) {
@@ -236,40 +230,10 @@ void split_node_t::set_geometry(wf::geometry_t geo) {
     geometry = geo;
 }
 
-/* node_t split_node_t::deepest_active_node() { */
-/*     return children.empty() ? this : children.at(active_child).get(); */
-/* } */
-
 // workspace_t
 
 node_parent_t workspace_t::get_active_parent_node() {
     return active_node->get_active_parent_node();
-    /* if (auto split_node = dynamic_cast<split_node_t *>(active_node.get())) { */
-    /*     return split_node; */
-    /* } else if (auto spli) { */
-    /*     if (active_node->prefered_split_type) */
-    /* } */
-
-    /* if (auto root = dynamic_cast<split_node_t *>(tiled_root.get())) { */
-    /*     auto deepest = root->deepest_active_node(); */
-    /*     if (auto deepest_split = dynamic_cast<split_node_t *>(deepest.get())) { */
-    /*         return deepest_split; */
-    /*     } else { */
-    /*         return deepest->parent; */
-    /*     } */
-    /* } else { */
-    /*     if (tiled_root) { */
-    /*         auto new_root = std::make_unique<split_node_t>(geometry); */
-    /*         new_root->insert_child_back(std::move(tiled_root)); */
-
-    /*         tiled_root = std::move(new_root); */
-    /*     } else { */
-    /*         tiled_root = std::make_unique<split_node_t>(geometry); */
-    /*     } */
-
-    /*     return nonstd::make_observer<split_node_t>( */
-    /*             static_cast<split_node_t *>(tiled_root.get())); */
-    /* } */
 }
 
 void workspace_t::insert_floating_node(owned_node_t node) {
