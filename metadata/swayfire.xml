@@ -18,5 +18,15 @@
         <_long>Toggle split direction</_long>
         <default>&lt;super&gt; KEY_E</default>
     </option>
+    <option name="key_set_want_vsplit" type="key">
+        <_short>Set vertical split preference</_short>
+        <_long>Set the split direction preference of the current window to vertical</_long>
+        <default>&lt;super&gt; KEY_V</default>
+    </option>
+    <option name="key_set_want_hsplit" type="key">
+        <_short>Set horizontal split preference</_short>
+        <_long>Set the split direction preference of the current window to horizontal</_long>
+        <default>&lt;super&gt; KEY_B</default>
+    </option>
 	</plugin>
 </wayfire>

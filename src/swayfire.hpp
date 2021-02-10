@@ -231,6 +231,12 @@ class swayfire_t : public wf::plugin_interface_t {
         wf::option_wrapper_t<wf::keybinding_t> 
             key_toggle_split_direction{"swayfire/key_toggle_split_direction"};
 
+        wf::option_wrapper_t<wf::keybinding_t> 
+            key_set_want_vsplit{"swayfire/key_set_want_vsplit"};
+
+        wf::option_wrapper_t<wf::keybinding_t> 
+            key_set_want_hsplit{"swayfire/key_set_want_hsplit"};
+
         wf::key_callback on_toggle_tile = [&](auto){
             auto wsid = output->workspace->get_current_workspace();
             auto &ws = workspaces.get(wsid);
@@ -244,6 +250,26 @@ class swayfire_t : public wf::plugin_interface_t {
 
             if (ws.active_node && ws.active_node->parent) {
                 ws.toggle_split_direction_node(ws.active_node);
+                return true;
+            }
+            return false;
+        };
+
+        wf::key_callback on_set_want_vsplit = [&](auto){
+            auto wsid = output->workspace->get_current_workspace();
+            auto &ws = workspaces.get(wsid);
+            if (auto vnode = dynamic_cast<view_node_t *>(ws.active_node.get())) {
+                vnode->prefered_split_type = split_type_t::VSPLIT;
+                return true;
+            }
+            return false;
+        };
+
+        wf::key_callback on_set_want_hsplit = [&](auto){
+            auto wsid = output->workspace->get_current_workspace();
+            auto &ws = workspaces.get(wsid);
+            if (auto vnode = dynamic_cast<view_node_t *>(ws.active_node.get())) {
+                vnode->prefered_split_type = split_type_t::HSPLIT;
                 return true;
             }
             return false;

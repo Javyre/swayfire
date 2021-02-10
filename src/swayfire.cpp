@@ -40,6 +40,8 @@ node_parent_t view_node_t::get_active_parent_node() {
         new_parent->split_type = *prefered_split_type;
         auto owned_self = parent->swap_child(this, std::move(new_parent));
         new_parent_ref->insert_child_back(std::move(owned_self));
+
+        prefered_split_type = {};
         return new_parent_ref;
     } else {
         return parent;
@@ -450,9 +452,13 @@ void swayfire_t::unbind_signals() {
 void swayfire_t::bind_keys() {
     output->add_key(key_toggle_tile, &on_toggle_tile);
     output->add_key(key_toggle_split_direction, &on_toggle_split_direction);
+    output->add_key(key_set_want_vsplit, &on_set_want_vsplit);
+    output->add_key(key_set_want_hsplit, &on_set_want_hsplit);
 }
 
 void swayfire_t::unbind_keys() {
+    output->rem_binding(&on_set_want_hsplit);
+    output->rem_binding(&on_set_want_vsplit);
     output->rem_binding(&on_toggle_split_direction);
     output->rem_binding(&on_toggle_tile);
 }
