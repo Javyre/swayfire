@@ -4,20 +4,19 @@
 	<_short>Swayfire</_short>
 	<_long>Tiling window manager inspired by Sway</_long>
 	<category>Window Management</category>
-	<!-- <option name="transient_output" type="string"> -->
-	<!-- 	<_short>Transient output</_short> -->
-	<!-- 	<default>HDMI-A-2</default> -->
-	<!-- </option> -->
+
     <option name="key_toggle_tile" type="key">
         <_short>Toggle tile</_short>
         <_long>Toggle tiling current window</_long>
-        <default>&lt;super&gt; KEY_T</default>
+        <default>&lt;super&gt; &lt;shift&gt; KEY_SPACE</default>
     </option>
+
     <option name="key_toggle_split_direction" type="key">
         <_short>Toggle split direction</_short>
         <_long>Toggle split direction</_long>
         <default>&lt;super&gt; KEY_E</default>
     </option>
+
     <option name="key_set_want_vsplit" type="key">
         <_short>Set vertical split preference</_short>
         <_long>Set the split direction preference of the current window to vertical</_long>
@@ -28,5 +27,33 @@
         <_long>Set the split direction preference of the current window to horizontal</_long>
         <default>&lt;super&gt; KEY_B</default>
     </option>
+
+    <option name="key_focus_left" type="key">
+        <_short>Focus node to the left of active</_short>
+        <_long>Focus node to the left of active</_long>
+        <default>&lt;super&gt; KEY_H</default>
+    </option>
+    <option name="key_focus_right" type="key">
+        <_short>Focus node to the right of active</_short>
+        <_long>Focus node to the right of active</_long>
+        <default>&lt;super&gt; KEY_L</default>
+    </option>
+    <option name="key_focus_down" type="key">
+        <_short>Focus node below active</_short>
+        <_long>Focus node below active</_long>
+        <default>&lt;super&gt; KEY_J</default>
+    </option>
+    <option name="key_focus_up" type="key">
+        <_short>Focus node above active</_short>
+        <_long>Focus node above active</_long>
+        <default>&lt;super&gt; KEY_K</default>
+    </option>
+
+    <option name="key_toggle_focus_tile" type="key">
+        <_short>Toggle focus between tiled and floating windows</_short>
+        <_long>Toggle focus between tiled and floating windows</_long>
+        <default>&lt;super&gt; KEY_SPACE</default>
+    </option>
+
 	</plugin>
 </wayfire>

@@ -1,5 +1,7 @@
 #include "swayfire.hpp"
+#include <algorithm>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <wayfire/config/types.hpp>
 #include <wayfire/core.hpp>
@@ -41,6 +43,13 @@ wf::geometry_t nonwf::local_to_relative_geometry(
     return geo;
 }
 
+wf::point_t nonwf::geometry_center(wf::geometry_t geo) {
+    return {
+        (int)std::floor((geo.x + geo.width) / 2.0f), 
+        (int)std::floor((geo.y + geo.height) / 2.0f), 
+    };
+}
+
 // node_parent_interface_t
 
 split_node_ref_t node_parent_interface_t::as_split_node() {
@@ -59,6 +68,11 @@ void view_node_t::set_floating(bool fl) {
 
 void view_node_t::set_wsid(wf::point_t wsid) {
     this->wsid = wsid;
+}
+
+wf::geometry_t view_node_t::get_geometry() {
+    geometry = view->get_wm_geometry();
+    return geometry;
 }
 
 void view_node_t::set_geometry(wf::geometry_t geo) {
@@ -116,11 +130,14 @@ void split_node_t::insert_child_back(owned_node_t node) {
     refresh_geometry();
 }
 
-owned_node_t split_node_t::remove_child(node_t node) {
-    auto child = std::find_if(children.begin(), children.end(), [&](auto &c){
+std::vector<owned_node_t>::iterator split_node_t::find_child(node_t node) {
+    return std::find_if(children.begin(), children.end(), [&](auto &c){
         return c.get() == node.get();
     });
+}
 
+owned_node_t split_node_t::remove_child(node_t node) {
+    auto child = find_child(node);
     if (child == children.end())
         LOGE("Node ", node, " not found in split node: ", this);
 
@@ -153,23 +170,76 @@ owned_node_t split_node_t::remove_child(node_t node) {
     return owned_node;
 }
 
+void split_node_t::set_active_child(node_t node) {
+    auto child = find_child(node);
+    if (child == children.end()) {
+        LOGE("Node ", node, " not found in split node: ", this);
+        return;
+    }
+
+    active_child = std::distance(children.begin(), child);
+}
+
 node_parent_t split_node_t::get_active_parent_node() {
     return this;
 }
 
 owned_node_t split_node_t::swap_child(node_t node, owned_node_t other) {
-    auto child = std::find_if(children.begin(), children.end(), [&](auto &c){
-        return c.get() == node.get();
-    });
-
+    auto child = find_child(node);
     if (child == children.end())
         LOGE("Node ", node, " not found in split node: ", this);
 
     other->set_geometry((*child)->get_geometry());
+    other->parent = this;
 
     (*child).swap(other);
 
     return other;
+}
+
+node_t split_node_t::get_last_active_node() {
+    auto &child = children.at(active_child);
+    if (auto split = dynamic_cast<split_node_t *>(child.get())) {
+        return split->get_last_active_node();
+    } else {
+        return child.get();
+    }
+}
+
+node_t split_node_t::get_adjacent(node_t node, direction_t dir) {
+    auto child = find_child(node);
+    if (child == children.end())
+        LOGE("Node ", node, " not found in split node: ", this);
+
+    switch (split_type) {
+        case split_type_t::VSPLIT: 
+        case split_type_t::TABBED:
+            {
+                switch (dir) {
+#define PREV_NODE child == children.begin() ? nullptr : (*(child-1)).get()
+#define NEXT_NODE child == (children.end()-1) ? nullptr : (*(child+1)).get()
+                    case direction_t::LEFT: return PREV_NODE;
+                    case direction_t::RIGHT: return NEXT_NODE;
+                    case direction_t::UP:
+                    case direction_t::DOWN:
+                        return parent->get_adjacent(this, dir);
+                }
+            }
+        case split_type_t::HSPLIT: 
+        case split_type_t::STACKED: 
+            {
+                switch (dir) {
+                    case direction_t::LEFT:
+                    case direction_t::RIGHT:
+                        return parent->get_adjacent(this, dir);
+                    case direction_t::UP: return PREV_NODE;
+                    case direction_t::DOWN: return NEXT_NODE;
+#undef NEXT_NODE
+#undef PREV_NODE
+                }
+                break;
+            }
+    }
 }
 
 void split_node_t::set_floating(bool fl) {
@@ -232,8 +302,25 @@ void split_node_t::set_geometry(wf::geometry_t geo) {
 
 // workspace_t
 
+void workspace_t::set_active_node(node_t node) {
+    if (auto vnode = dynamic_cast<view_node_t *>(node.get()))
+        if (!vnode->view->activated)
+            vnode->view->focus_request();
+
+    node->parent->set_active_child(node);
+
+    if (!node->get_floating())
+        active_tiled_node = node;
+
+    active_node = node;
+}
+
+node_t workspace_t::get_active_node() {
+    return active_node;
+}
+
 node_parent_t workspace_t::get_active_parent_node() {
-    return active_node->get_active_parent_node();
+    return get_active_node()->get_active_parent_node();
 }
 
 void workspace_t::insert_floating_node(owned_node_t node) {
@@ -243,12 +330,15 @@ void workspace_t::insert_floating_node(owned_node_t node) {
     floating_nodes.push_back(std::move(node));
 }
 
-owned_node_t workspace_t::remove_floating_node(node_t node) {
-    auto &fl = floating_nodes;
-    auto child = std::find_if(fl.begin(), fl.end(), [&](auto &c){
+std::vector<owned_node_t>::iterator workspace_t::find_floating(node_t node) {
+    return std::find_if(floating_nodes.begin(), floating_nodes.end(), [&](auto &c){
         return c.get() == node.get();
     });
+}
 
+owned_node_t workspace_t::remove_floating_node(node_t node) {
+    auto &fl = floating_nodes;
+    auto child = find_floating(node);
     if (child == fl.end()) {
         LOGE("Node not floating in ", this, ": ", node);
         return nullptr;
@@ -258,6 +348,12 @@ owned_node_t workspace_t::remove_floating_node(node_t node) {
 
     fl.erase(child);
 
+    if (floating_nodes.empty())
+        active_floating = 0;
+    else
+        active_floating = 
+            std::clamp(active_floating, (uint32_t)0, (uint32_t)(floating_nodes.size()-1));
+
     owned_node->set_floating(false);
 
     return owned_node;
@@ -265,10 +361,7 @@ owned_node_t workspace_t::remove_floating_node(node_t node) {
 
 owned_node_t workspace_t::swap_floating_node(node_t node, owned_node_t other) {
     auto &fl = floating_nodes;
-    auto child = std::find_if(fl.begin(), fl.end(), [&](auto &c){
-        return c.get() == node.get();
-    });
-
+    auto child = find_floating(node);
     if (child == fl.end()) {
         LOGE("Node not floating in ", this, ": ", node);
         return nullptr;
@@ -276,11 +369,34 @@ owned_node_t workspace_t::swap_floating_node(node_t node, owned_node_t other) {
 
     other->set_floating(true);
     other->set_wsid(wsid);
+    other->parent = this;
     other->set_geometry((*child)->get_geometry());
 
     (*child).swap(other);
 
     return other;
+}
+
+node_t workspace_t::get_active_floating_node() {
+    if (floating_nodes.empty())
+        return nullptr;
+
+    return floating_nodes.at(active_floating).get();
+}
+
+node_t workspace_t::get_active_tiled_node() {
+    return active_tiled_node;
+}
+
+owned_node_t workspace_t::swap_tiled_root(std::unique_ptr<split_node_t> other) {
+    auto ret = std::move(tiled_root);
+
+    tiled_root = std::move(other);
+    tiled_root->set_floating(false);
+    tiled_root->set_wsid(wsid);
+    tiled_root->parent = this;
+
+    return ret;
 }
 
 void workspace_t::insert_tiled_node(owned_node_t node) {
@@ -297,19 +413,23 @@ owned_node_t workspace_t::remove_tiled_node(node_t node) {
         return nullptr;
     }
 
-    owned_node_t owned_node;
+    auto parent = node->parent;
+    owned_node_t ret;
     if (auto parent = node->parent) {
-        owned_node = parent->remove_child(node);
+        ret = parent->remove_child(node);
     } else if (node.get() == tiled_root.get()) {
-        owned_node = std::move(tiled_root);
-        tiled_root = std::make_unique<split_node_t>(geometry, output);
+        ret = swap_tiled_root(std::make_unique<split_node_t>(geometry, output));
     } else {
         LOGE("Node not tiled in ", this, ": ", node);
         return nullptr;
     }
 
-    owned_node->set_floating(false);
-    return owned_node;
+    if (ret.get() == get_active_tiled_node().get()) {
+        active_tiled_node = parent->get_last_active_node();
+    }
+
+    ret->set_floating(false);
+    return ret;
 }
 
 owned_node_t workspace_t::remove_node(node_t node) {
@@ -331,15 +451,14 @@ owned_node_t workspace_t::remove_child(node_t node) {
         // floating nodes are always direct children of the workspace
         ret = remove_floating_node(node);
     } else if (node.get() == tiled_root.get()) {
-        ret = std::move(tiled_root);
-        tiled_root = std::make_unique<split_node_t>(geometry, output);
+        ret = swap_tiled_root(std::make_unique<split_node_t>(geometry, output));
     } else {
         LOGE("Node is not a direct child of ", this, ": ", node);
         return nullptr;
     }
 
-    if (node.get() == active_node.get())
-        active_node = tiled_root;
+    if (node.get() == get_active_node().get())
+        set_active_node(tiled_root);
 
     return ret;
 }
@@ -354,6 +473,18 @@ owned_node_t workspace_t::swap_child(node_t node, owned_node_t other) {
     } else {
         LOGE("Node is not a direct child of ", this, ": ", node);
         return nullptr;
+    }
+}
+
+void workspace_t::set_active_child(node_t node) {
+    if (node->get_floating()) {
+        auto child = find_floating(node);
+        if (child == floating_nodes.end()) {
+            LOGE("Node not in ", this, ": ", node);
+        }
+        active_floating = std::distance(floating_nodes.begin(), child);
+    } else {
+        active_tiled_node = node;
     }
 }
 
@@ -384,6 +515,59 @@ void workspace_t::toggle_split_direction_node(node_t node) {
     }
 }
 
+node_t workspace_t::get_last_active_node() {
+    return active_node;
+}
+
+node_t workspace_t::get_adjacent(node_t node, direction_t dir) {
+    if (node.get() == tiled_root.get()) {
+        LOGE("No node is adjacent to root tiled node : ", node);
+        return nullptr;
+    } else {
+        auto child = find_floating(node);
+        if (child == floating_nodes.end()) {
+            LOGE("Node not in ", this, ": ", node);
+            return nullptr;
+        }
+
+        auto &fl = floating_nodes;
+        auto center = nonwf::geometry_center(node->get_geometry());
+        switch (dir) {
+#define CLOSEST(axis, cmp)                                                                        \
+{                                                                                                 \
+    auto closest = std::min_element(fl.begin(), fl.end(),                                         \
+            [&](auto &a, auto &b){                                                                \
+                if (a.get() == node.get()) return false;                                          \
+                if (b.get() == node.get()) return true;                                           \
+                                                                                                  \
+                auto apoint = nonwf::geometry_center(a->get_geometry());                          \
+                auto bpoint = nonwf::geometry_center(b->get_geometry());                          \
+                                                                                                  \
+                if (center.axis cmp apoint.axis) return false;                                    \
+                if (center.axis cmp bpoint.axis) return true;                                     \
+                                                                                                  \
+                return std::abs(center.axis - apoint.axis) < std::abs(center.axis - bpoint.axis); \
+            });                                                                                   \
+    if (closest == fl.end()                                                                       \
+            || (*closest).get() == node.get()                                                     \
+            || center.axis cmp nonwf::geometry_center((*closest)->get_geometry()).axis)           \
+        return nullptr;                                                                           \
+    else                                                                                          \
+        return (*closest).get();                                                                  \
+}
+            case direction_t::LEFT:
+                CLOSEST(x, <);
+            case direction_t::RIGHT:
+                CLOSEST(x, >);
+            case direction_t::UP:
+                CLOSEST(y, <);
+            case direction_t::DOWN:
+                CLOSEST(y, >);
+#undef CLOSEST
+        }
+    }
+}
+
 // workspaces_t
 
 void workspaces_t::update_dims(
@@ -401,7 +585,8 @@ void workspaces_t::update_dims(
         } else if (col.size() < (uint32_t)ndims.height) {
             col.reserve(ndims.height);
             for (int32_t y = col.size(); y < ndims.height; y++) {
-                col.push_back(workspace_t({x, y}, geo, output));
+                col.push_back(std::unique_ptr<workspace_t>(
+                            new workspace_t({x, y}, geo, output)));
             }
         } else {
             col.erase(col.begin()+ndims.height, col.end());
@@ -410,17 +595,31 @@ void workspaces_t::update_dims(
     }
 }
 
-workspace_t &workspaces_t::get(wf::point_t ws) {
-    return workspaces.at(ws.x).at(ws.y);
+workspace_ref_t workspaces_t::get(wf::point_t ws) {
+    return workspaces.at(ws.x).at(ws.y).get();
 }
 
-void workspaces_t::for_each(std::function<void(workspace_t &)> fun) {
+void workspaces_t::for_each(std::function<void(workspace_ref_t)> fun) {
     for (auto &col : workspaces)
         for (auto &ws : col)
-            fun(ws);
+            fun(ws.get());
 }
 
 // swayfire_t
+
+bool swayfire_t::focus_direction(direction_t dir) {
+    auto wsid = output->workspace->get_current_workspace();
+    auto ws = workspaces.get(wsid);
+    auto active = ws->get_active_node();
+    if (auto adj = active->parent->get_adjacent(active, dir)) {
+        if (auto split = dynamic_cast<split_node_t *>(adj.get()))
+            adj = split->get_last_active_node();
+
+        ws->set_active_node(adj);
+        return true;
+    }
+    return false;
+}
 
 std::unique_ptr<view_node_t> swayfire_t::init_view_node(wayfire_view view) {
     auto node = std::make_unique<view_node_t>(view, output);
@@ -464,13 +663,29 @@ void swayfire_t::unbind_signals() {
 void swayfire_t::bind_keys() {
     output->add_key(key_toggle_tile, &on_toggle_tile);
     output->add_key(key_toggle_split_direction, &on_toggle_split_direction);
+
     output->add_key(key_set_want_vsplit, &on_set_want_vsplit);
     output->add_key(key_set_want_hsplit, &on_set_want_hsplit);
+
+    output->add_key(key_focus_left, &on_focus_left);
+    output->add_key(key_focus_right, &on_focus_right);
+    output->add_key(key_focus_down, &on_focus_down);
+    output->add_key(key_focus_up, &on_focus_up);
+
+    output->add_key(key_toggle_focus_tile, &on_toggle_focus_tile);
 }
 
 void swayfire_t::unbind_keys() {
+    output->rem_binding(&on_toggle_focus_tile);
+
+    output->rem_binding(&on_focus_up);
+    output->rem_binding(&on_focus_down);
+    output->rem_binding(&on_focus_right);
+    output->rem_binding(&on_focus_left);
+
     output->rem_binding(&on_set_want_hsplit);
     output->rem_binding(&on_set_want_vsplit);
+
     output->rem_binding(&on_toggle_split_direction);
     output->rem_binding(&on_toggle_tile);
 }
@@ -487,8 +702,8 @@ void swayfire_t::init() {
 
     for (auto view : views) {
         if (view->role == wf::VIEW_ROLE_TOPLEVEL) {
-            auto &ws = workspaces.get(nonwf::get_view_workspace(view, output));
-            ws.insert_tiled_node(init_view_node(view));
+            auto ws = workspaces.get(nonwf::get_view_workspace(view, output));
+            ws->insert_tiled_node(init_view_node(view));
         }
     }
 
@@ -496,7 +711,7 @@ void swayfire_t::init() {
         if (auto vdata = active_view->get_data<view_data_t>()) {
             auto node = vdata->node;
 
-            workspaces.get(node->get_wsid()).active_node = node;
+            workspaces.get(node->get_wsid())->set_active_node(node);
         }
     }
 
