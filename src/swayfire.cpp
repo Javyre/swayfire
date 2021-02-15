@@ -56,6 +56,16 @@ split_node_ref_t node_parent_interface_t::as_split_node() {
     return dynamic_cast<split_node_t *>(this);
 }
 
+// node_interface_t
+
+split_node_ref_t node_interface_t::as_split_node() {
+    return dynamic_cast<split_node_t *>(this);
+}
+
+view_node_ref_t node_interface_t::as_view_node() {
+    return dynamic_cast<view_node_t *>(this);
+}
+
 // view_node_t
 
 void view_node_t::set_floating(bool fl) {
@@ -97,7 +107,7 @@ node_parent_t view_node_t::get_active_parent_node() {
 
 // split_node_t
 
-void split_node_t::insert_child_front(owned_node_t node) {
+void split_node_t::insert_child_at(std::vector<owned_node_t>::iterator at, owned_node_t node) {
     node->parent = this;
 
     float shrink_ratio = (float)children.size() / (float)(children.size()+1);
@@ -107,27 +117,36 @@ void split_node_t::insert_child_front(owned_node_t node) {
         *i *= shrink_ratio;
         total_ratio += *i;
     }
-    children_ratios.insert(children_ratios.begin(), 1.0f-total_ratio);
+    children_ratios.insert(
+            children_ratios.begin()+std::distance(children.begin(), at),
+            1.0f-total_ratio);
 
-    children.insert(children.begin(), std::move(node));
+    children.insert(at, std::move(node));
     refresh_geometry();
 }
 
+void split_node_t::insert_child_front(owned_node_t node) {
+    insert_child_at(children.begin(), std::move(node));
+}
+
 void split_node_t::insert_child_back(owned_node_t node) {
-    node->parent = this;
+    insert_child_at(children.end(), std::move(node));
+}
 
-    float shrink_ratio = (float)children.size() / (float)(children.size()+1);
-    float total_ratio = 0;
+void split_node_t::insert_child_front_of(node_t of, owned_node_t node) {
+    auto child = find_child(of);
+    if (child == children.end())
+        LOGE("Node ", of, " not found in split node: ", this);
 
-    for (auto i = children_ratios.begin(); i != children_ratios.end(); i++) {
-        *i *= shrink_ratio;
-        total_ratio += *i;
-    }
-    children_ratios.push_back(1.0f-total_ratio);
+    insert_child_at(child, std::move(node));
+}
 
-    children.push_back(std::move(node));
-    LOGD("children: ", children.size(), ",", children_ratios.size());
-    refresh_geometry();
+void split_node_t::insert_child_back_of(node_t of, owned_node_t node) {
+    auto child = find_child(of);
+    if (child == children.end())
+        LOGE("Node ", of, " not found in split node: ", this);
+
+    insert_child_at(child+1, std::move(node));
 }
 
 std::vector<owned_node_t>::iterator split_node_t::find_child(node_t node) {
@@ -178,6 +197,8 @@ void split_node_t::set_active_child(node_t node) {
     }
 
     active_child = std::distance(children.begin(), child);
+
+    parent->set_active_child(this);
 }
 
 node_parent_t split_node_t::get_active_parent_node() {
@@ -198,8 +219,11 @@ owned_node_t split_node_t::swap_child(node_t node, owned_node_t other) {
 }
 
 node_t split_node_t::get_last_active_node() {
+    if (children.empty())
+        return nullptr;
+
     auto &child = children.at(active_child);
-    if (auto split = dynamic_cast<split_node_t *>(child.get())) {
+    if (auto split = child->as_split_node()) {
         return split->get_last_active_node();
     } else {
         return child.get();
@@ -216,8 +240,10 @@ node_t split_node_t::get_adjacent(node_t node, direction_t dir) {
         case split_type_t::TABBED:
             {
                 switch (dir) {
-#define PREV_NODE child == children.begin() ? nullptr : (*(child-1)).get()
-#define NEXT_NODE child == (children.end()-1) ? nullptr : (*(child+1)).get()
+#define PREV_NODE child == children.begin() \
+                    ? parent->get_adjacent(this, dir) : (*(child-1)).get()
+#define NEXT_NODE child == (children.end()-1) \
+                    ? parent->get_adjacent(this, dir) : (*(child+1)).get()
                     case direction_t::LEFT: return PREV_NODE;
                     case direction_t::RIGHT: return NEXT_NODE;
                     case direction_t::UP:
@@ -240,6 +266,148 @@ node_t split_node_t::get_adjacent(node_t node, direction_t dir) {
                 break;
             }
     }
+}
+
+split_node_ref_t split_node_t::find_parent_split(bool horiz) {
+    auto p = parent->as_split_node();
+    bool horizontal = false;
+    bool vertical = false;
+    while (p) {
+        switch (p->split_type) {
+            case split_type_t::VSPLIT: 
+            case split_type_t::TABBED:
+                horizontal = true;
+                break;
+            case split_type_t::HSPLIT: 
+            case split_type_t::STACKED: 
+                vertical = true;
+                break;
+        }
+        if (horiz && horizontal) break;
+        if (!horiz && vertical) break;
+        p = p->parent->as_split_node();
+    }
+    if ((horizontal && horiz) || (vertical && !horiz))
+        return p;
+    else
+        return nullptr;
+}
+
+bool split_node_t::move_child_outside(node_iter_t child, direction_t dir) {
+    if (auto adj = parent->get_adjacent(this, dir)) {
+        if (auto adj_split = adj->parent->as_split_node()) {
+            switch (dir) {
+                case direction_t::LEFT:
+                case direction_t::UP:
+                    adj_split->insert_child_back_of(adj, remove_child(*child));
+                    break;
+                case direction_t::RIGHT:
+                case direction_t::DOWN:
+                    adj_split->insert_child_front_of(adj, remove_child(*child));
+                    break;
+            }
+            return true;
+        }
+    } else {
+        switch (dir) {
+            case direction_t::LEFT:
+                if (auto p = find_parent_split(true)) {
+                    p->insert_child_front(remove_child(*child));
+                    return true;
+                }
+                break;
+            case direction_t::RIGHT:
+                if (auto p = find_parent_split(true)) {
+                    p->insert_child_back(remove_child(*child));
+                    return true;
+                }
+                break;
+            case direction_t::UP:
+                if (auto p = find_parent_split(false)) {
+                    p->insert_child_front(remove_child(*child));
+                    return true;
+                }
+                break;
+            case direction_t::DOWN:
+                if (auto p = find_parent_split(false)) {
+                    p->insert_child_back(remove_child(*child));
+                    return true;
+                }
+                break;
+        }
+    }
+    return false;
+}
+
+bool split_node_t::move_child(node_t node, direction_t dir) {
+    auto child = find_child(node);
+    if (child == children.end())
+        LOGE("Node ", node, " not found in split node: ", this);
+
+#define MOVE_BACK()                                                 \
+    {                                                               \
+        if (child == children.begin()) {                            \
+            return move_child_outside(child, dir);                  \
+        } else {                                                    \
+            if (auto adj_split = (*(child-1))->as_split_node()) {   \
+                adj_split->insert_child_back(remove_child(*child)); \
+            } else {                                                \
+                insert_child_front_of((*(child-1)).get(),           \
+                        remove_child(*child));                      \
+            }                                                       \
+            return true;                                            \
+        }                                                           \
+    }
+
+#define MOVE_FORWARD()                                               \
+    {                                                                \
+        if (child == children.end()-1) {                             \
+            return move_child_outside(child, dir);                   \
+        } else {                                                     \
+            if (auto adj_split = (*(child+1))->as_split_node()) {    \
+                adj_split->insert_child_front(remove_child(*child)); \
+            } else {                                                 \
+                insert_child_back_of((*(child+1)).get(),             \
+                        remove_child(*child));                       \
+            }                                                        \
+            return true;                                             \
+        }                                                            \
+    }
+
+    switch (split_type) {
+        case split_type_t::VSPLIT: 
+        case split_type_t::TABBED:
+            {
+                switch (dir) {
+                    case direction_t::LEFT:
+                        MOVE_BACK();
+                        break;
+                    case direction_t::RIGHT:
+                        MOVE_FORWARD();
+                        break;
+                    case direction_t::UP:
+                    case direction_t::DOWN:
+                        return move_child_outside(child, dir);
+                }
+            }
+        case split_type_t::HSPLIT: 
+        case split_type_t::STACKED: 
+            {
+                switch (dir) {
+                    case direction_t::UP:
+                        MOVE_BACK();
+                        break;
+                    case direction_t::DOWN:
+                        MOVE_FORWARD();
+                        break;
+                    case direction_t::LEFT:
+                    case direction_t::RIGHT:
+                        return move_child_outside(child, dir);
+                }
+            }
+    }
+#undef MOVE_FORWARD
+#undef MOVE_BACK
 }
 
 void split_node_t::set_floating(bool fl) {
@@ -303,7 +471,7 @@ void split_node_t::set_geometry(wf::geometry_t geo) {
 // workspace_t
 
 void workspace_t::set_active_node(node_t node) {
-    if (auto vnode = dynamic_cast<view_node_t *>(node.get()))
+    if (auto vnode = node->as_view_node())
         if (!vnode->view->activated)
             vnode->view->focus_request();
 
@@ -568,6 +736,31 @@ node_t workspace_t::get_adjacent(node_t node, direction_t dir) {
     }
 }
 
+bool workspace_t::move_child(node_t node, direction_t dir) {
+    if (node->get_floating()) {
+        auto geo = node->get_geometry();
+
+        switch (dir) {
+            case direction_t::LEFT:
+                geo.x -= FLOATING_MOVE_STEP;
+                break;
+            case direction_t::RIGHT:
+                geo.x += FLOATING_MOVE_STEP;
+                break;
+            case direction_t::UP:
+                geo.y -= FLOATING_MOVE_STEP;
+                break;
+            case direction_t::DOWN:
+                geo.y += FLOATING_MOVE_STEP;
+                break;
+        }
+
+        node->set_geometry(geo);
+        return true;
+    }
+    return false;
+}
+
 // workspaces_t
 
 void workspaces_t::update_dims(
@@ -612,13 +805,37 @@ bool swayfire_t::focus_direction(direction_t dir) {
     auto ws = workspaces.get(wsid);
     auto active = ws->get_active_node();
     if (auto adj = active->parent->get_adjacent(active, dir)) {
-        if (auto split = dynamic_cast<split_node_t *>(adj.get()))
+        if (auto split = adj->as_split_node())
             adj = split->get_last_active_node();
 
         ws->set_active_node(adj);
         return true;
     }
     return false;
+}
+
+bool swayfire_t::move_direction(direction_t dir) {
+    auto wsid = output->workspace->get_current_workspace();
+    auto ws = workspaces.get(wsid);
+    auto active = ws->get_active_node();
+
+    auto old_parent = active->parent;
+    if (!active->parent->move_child(active, dir))
+        return false;
+
+    if (old_parent.get() != ws->tiled_root.get()) {
+        if (auto parent_split = old_parent->as_split_node()) {
+            if (parent_split->children.size() == 1) {
+                auto only_child = 
+                    parent_split->remove_child(parent_split->get_last_active_node());
+
+                parent_split->parent->swap_child(parent_split, std::move(only_child));
+            }
+        }
+    }
+
+    ws->set_active_child(active);
+    return true;
 }
 
 std::unique_ptr<view_node_t> swayfire_t::init_view_node(wayfire_view view) {
@@ -661,7 +878,6 @@ void swayfire_t::unbind_signals() {
 }
 
 void swayfire_t::bind_keys() {
-    output->add_key(key_toggle_tile, &on_toggle_tile);
     output->add_key(key_toggle_split_direction, &on_toggle_split_direction);
 
     output->add_key(key_set_want_vsplit, &on_set_want_vsplit);
@@ -673,9 +889,23 @@ void swayfire_t::bind_keys() {
     output->add_key(key_focus_up, &on_focus_up);
 
     output->add_key(key_toggle_focus_tile, &on_toggle_focus_tile);
+
+    output->add_key(key_move_left, &on_move_left);
+    output->add_key(key_move_right, &on_move_right);
+    output->add_key(key_move_down, &on_move_down);
+    output->add_key(key_move_up, &on_move_up);
+
+    output->add_key(key_toggle_tile, &on_toggle_tile);
 }
 
 void swayfire_t::unbind_keys() {
+    output->rem_binding(&on_toggle_tile);
+
+    output->rem_binding(&on_move_up);
+    output->rem_binding(&on_move_down);
+    output->rem_binding(&on_move_right);
+    output->rem_binding(&on_move_left);
+
     output->rem_binding(&on_toggle_focus_tile);
 
     output->rem_binding(&on_focus_up);
@@ -687,7 +917,6 @@ void swayfire_t::unbind_keys() {
     output->rem_binding(&on_set_want_vsplit);
 
     output->rem_binding(&on_toggle_split_direction);
-    output->rem_binding(&on_toggle_tile);
 }
 
 void swayfire_t::init() {

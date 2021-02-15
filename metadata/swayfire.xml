@@ -5,12 +5,6 @@
 	<_long>Tiling window manager inspired by Sway</_long>
 	<category>Window Management</category>
 
-    <option name="key_toggle_tile" type="key">
-        <_short>Toggle tile</_short>
-        <_long>Toggle tiling current window</_long>
-        <default>&lt;super&gt; &lt;shift&gt; KEY_SPACE</default>
-    </option>
-
     <option name="key_toggle_split_direction" type="key">
         <_short>Toggle split direction</_short>
         <_long>Toggle split direction</_long>
@@ -53,6 +47,33 @@
         <_short>Toggle focus between tiled and floating windows</_short>
         <_long>Toggle focus between tiled and floating windows</_long>
         <default>&lt;super&gt; KEY_SPACE</default>
+    </option>
+
+    <option name="key_move_left" type="key">
+        <_short>Move node to the left</_short>
+        <_long>Move node to the left</_long>
+        <default>&lt;super&gt; &lt;shift&gt; KEY_H</default>
+    </option>
+    <option name="key_move_right" type="key">
+        <_short>Move node to the right</_short>
+        <_long>Move node to the right</_long>
+        <default>&lt;super&gt; &lt;shift&gt; KEY_L</default>
+    </option>
+    <option name="key_move_down" type="key">
+        <_short>Move node below downwards</_short>
+        <_long>Move node below downwards</_long>
+        <default>&lt;super&gt; &lt;shift&gt; KEY_J</default>
+    </option>
+    <option name="key_move_up" type="key">
+        <_short>Move node upwards</_short>
+        <_long>Move node upwards</_long>
+        <default>&lt;super&gt; &lt;shift&gt; KEY_K</default>
+    </option>
+
+    <option name="key_toggle_tile" type="key">
+        <_short>Toggle tile</_short>
+        <_long>Toggle tiling current window</_long>
+        <default>&lt;super&gt; &lt;shift&gt; KEY_SPACE</default>
     </option>
 
 	</plugin>
