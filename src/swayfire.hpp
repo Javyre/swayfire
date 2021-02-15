@@ -159,6 +159,7 @@ class view_node_t : public node_interface_t {
         virtual void set_geometry(wf::geometry_t geo);
         virtual void set_floating(bool fl);
         virtual void set_wsid(wf::point_t wsid);
+        split_node_ref_t replace_with_split();
         virtual node_parent_t get_active_parent_node();
 
         virtual std::ostream& to_stream(std::ostream& os) const {

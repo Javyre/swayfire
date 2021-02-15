@@ -90,19 +90,26 @@ void view_node_t::set_geometry(wf::geometry_t geo) {
     view->set_geometry(nonwf::local_to_relative_geometry(geo, wsid, output));
 }
 
-node_parent_t view_node_t::get_active_parent_node() {
+split_node_ref_t view_node_t::replace_with_split() {
     if (prefered_split_type) {
         auto new_parent = std::make_unique<split_node_t>(get_geometry(), output);
         auto new_parent_ref = new_parent.get();
         new_parent->split_type = *prefered_split_type;
         auto owned_self = parent->swap_child(this, std::move(new_parent));
+        owned_self->set_floating(false);
         new_parent_ref->insert_child_back(std::move(owned_self));
 
         prefered_split_type = {};
         return new_parent_ref;
-    } else {
-        return parent;
     }
+    return nullptr;
+}
+
+node_parent_t view_node_t::get_active_parent_node() {
+    if (auto split = replace_with_split())
+        return split;
+    else
+        return parent;
 }
 
 // split_node_t
@@ -344,34 +351,42 @@ bool split_node_t::move_child(node_t node, direction_t dir) {
     if (child == children.end())
         LOGE("Node ", node, " not found in split node: ", this);
 
-#define MOVE_BACK()                                                 \
-    {                                                               \
-        if (child == children.begin()) {                            \
-            return move_child_outside(child, dir);                  \
-        } else {                                                    \
-            if (auto adj_split = (*(child-1))->as_split_node()) {   \
-                adj_split->insert_child_back(remove_child(*child)); \
-            } else {                                                \
-                insert_child_front_of((*(child-1)).get(),           \
-                        remove_child(*child));                      \
-            }                                                       \
-            return true;                                            \
-        }                                                           \
+#define MOVE_BACK()                                                          \
+    {                                                                        \
+        if (child == children.begin()) {                                     \
+            return move_child_outside(child, dir);                           \
+        } else {                                                             \
+            if (auto adj_split = (*(child-1))->as_split_node()) {            \
+                adj_split->insert_child_back(remove_child(*child));          \
+                return true;                                                 \
+            } else if (auto adj_view = (*(child-1))->as_view_node()) {      \
+                if (auto adj_split = adj_view->replace_with_split()) {       \
+                    adj_split->insert_child_back(remove_child(*child));      \
+                    return true;                                             \
+                }                                                            \
+            }                                                                \
+            insert_child_front_of((*(child-1)).get(), remove_child(*child)); \
+            return true;                                                     \
+        }                                                                    \
     }
 
-#define MOVE_FORWARD()                                               \
-    {                                                                \
-        if (child == children.end()-1) {                             \
-            return move_child_outside(child, dir);                   \
-        } else {                                                     \
-            if (auto adj_split = (*(child+1))->as_split_node()) {    \
-                adj_split->insert_child_front(remove_child(*child)); \
-            } else {                                                 \
-                insert_child_back_of((*(child+1)).get(),             \
-                        remove_child(*child));                       \
-            }                                                        \
-            return true;                                             \
-        }                                                            \
+#define MOVE_FORWARD()                                                      \
+    {                                                                       \
+        if (child == children.end()-1) {                                    \
+            return move_child_outside(child, dir);                          \
+        } else {                                                            \
+            if (auto adj_split = (*(child+1))->as_split_node()) {           \
+                adj_split->insert_child_front(remove_child(*child));        \
+                return true;                                                \
+            } else if (auto adj_view = (*(child+1))->as_view_node()) {     \
+                if (auto adj_split = adj_view->replace_with_split()) {      \
+                    adj_split->insert_child_front(remove_child(*child));    \
+                    return true;                                            \
+                }                                                           \
+            }                                                               \
+            insert_child_back_of((*(child+1)).get(), remove_child(*child)); \
+            return true;                                                    \
+        }                                                                   \
     }
 
     switch (split_type) {
@@ -828,6 +843,9 @@ bool swayfire_t::move_direction(direction_t dir) {
             if (parent_split->children.size() == 1) {
                 auto only_child = 
                     parent_split->remove_child(parent_split->get_last_active_node());
+
+                if (auto vnode = only_child->as_view_node())
+                    vnode->prefered_split_type = parent_split->split_type;
 
                 parent_split->parent->swap_child(parent_split, std::move(only_child));
             }
