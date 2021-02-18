@@ -158,14 +158,14 @@ class view_node_t : public node_interface_t {
         view_node_t(wayfire_view view, output_ref_t output)
             : node_interface_t(output), view(view) {}
 
-        virtual wf::geometry_t get_geometry();
-        virtual void set_geometry(wf::geometry_t geo);
-        virtual void set_floating(bool fl);
-        virtual void set_wsid(wf::point_t wsid);
+        wf::geometry_t get_geometry() override;
+        void set_geometry(wf::geometry_t geo) override;
+        void set_floating(bool fl) override;
+        void set_wsid(wf::point_t wsid) override;
         split_node_ref_t replace_with_split();
-        virtual node_parent_t get_active_parent_node();
+        node_parent_t get_active_parent_node() override;
 
-        virtual std::ostream& to_stream(std::ostream& os) const {
+        std::ostream& to_stream(std::ostream& os) const override {
             os << "view-node-" << node_id;
             return os;
         }
@@ -197,23 +197,23 @@ class split_node_t : public node_interface_t, public node_parent_interface_t {
         void insert_child_back(owned_node_t node);
         void insert_child_front_of(node_t of, owned_node_t node);
         void insert_child_back_of(node_t of, owned_node_t node);
-        virtual void insert_child(owned_node_t node) { insert_child_back(std::move(node)); };
+        void insert_child(owned_node_t node) override { insert_child_back(std::move(node)); };
 
-        virtual owned_node_t remove_child(node_t node);
-        virtual void set_active_child(node_t node);
+        owned_node_t remove_child(node_t node) override;
+        void set_active_child(node_t node) override;
 
-        virtual void set_geometry(wf::geometry_t geo);
-        virtual void set_floating(bool fl);
-        virtual void set_wsid(wf::point_t wsid);
-        virtual node_parent_t get_active_parent_node();
-        virtual owned_node_t swap_child(node_t node, owned_node_t other);
+        void set_geometry(wf::geometry_t geo) override;
+        void set_floating(bool fl) override;
+        void set_wsid(wf::point_t wsid) override;
+        node_parent_t get_active_parent_node() override;
+        owned_node_t swap_child(node_t node, owned_node_t other) override;
 
-        virtual node_t get_last_active_node();
+        node_t get_last_active_node() override;
 
-        virtual node_t get_adjacent(node_t node, direction_t dir);
-        virtual bool move_child(node_t node, direction_t dir);
+        node_t get_adjacent(node_t node, direction_t dir) override;
+        bool move_child(node_t node, direction_t dir) override;
 
-        virtual std::ostream& to_stream(std::ostream& os) const {
+        std::ostream& to_stream(std::ostream& os) const override {
             os << "split-node-" << node_id;
             return os;
         }
@@ -273,21 +273,21 @@ class workspace_t : public node_parent_interface_t {
         owned_node_t remove_node(node_t node);
         void toggle_tile_node(node_t node);
         void toggle_split_direction_node(node_t node);
-        virtual node_t get_last_active_node();
-        virtual node_t get_adjacent(node_t node, direction_t dir);
-        virtual bool move_child(node_t node, direction_t dir);
+        node_t get_last_active_node() override;
+        node_t get_adjacent(node_t node, direction_t dir) override;
+        bool move_child(node_t node, direction_t dir) override;
 
         // These methods work with only direct children of the workspace
         // They will not walk the tree like other methods would
-        virtual void insert_child(owned_node_t node);
-        virtual owned_node_t remove_child(node_t node);
-        virtual owned_node_t swap_child(node_t node, owned_node_t other);
-        virtual void set_active_child(node_t node);
+        void insert_child(owned_node_t node) override;
+        owned_node_t remove_child(node_t node) override;
+        owned_node_t swap_child(node_t node, owned_node_t other) override;
+        void set_active_child(node_t node) override;
 
         void set_workarea(wf::geometry_t geo);
-        virtual wf::geometry_t get_geometry() { return geometry; }
+        wf::geometry_t get_geometry() { return geometry; }
 
-        virtual std::ostream& to_stream(std::ostream& os) const {
+        std::ostream& to_stream(std::ostream& os) const override {
             os << "workspace-" << wsid;
             return os;
         }
