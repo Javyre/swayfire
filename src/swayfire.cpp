@@ -697,18 +697,6 @@ void workspace_t::toggle_tile_node(node_t node) {
     }
 }
 
-void workspace_t::toggle_split_direction_node(node_t node) {
-    if (auto parent = node->parent->as_split_node()) {
-        LOGD("Toggling split dir: ", parent);
-
-        parent->split_type = (parent->split_type == split_type_t::HSPLIT)
-            ? split_type_t::VSPLIT
-            : split_type_t::HSPLIT;
-
-        parent->refresh_geometry();
-    }
-}
-
 node_t workspace_t::get_last_active_node() {
     return active_node;
 }
@@ -826,47 +814,6 @@ void workspaces_t::for_each(std::function<void(workspace_ref_t)> fun) {
 
 // swayfire_t
 
-bool swayfire_t::focus_direction(direction_t dir) {
-    auto wsid = output->workspace->get_current_workspace();
-    auto ws = workspaces.get(wsid);
-    auto active = ws->get_active_node();
-    if (auto adj = active->parent->get_adjacent(active, dir)) {
-        if (auto split = adj->as_split_node())
-            adj = split->get_last_active_node();
-
-        ws->set_active_node(adj);
-        return true;
-    }
-    return false;
-}
-
-bool swayfire_t::move_direction(direction_t dir) {
-    auto wsid = output->workspace->get_current_workspace();
-    auto ws = workspaces.get(wsid);
-    auto active = ws->get_active_node();
-
-    auto old_parent = active->parent;
-    if (!active->parent->move_child(active, dir))
-        return false;
-
-    if (old_parent.get() != ws->tiled_root.get()) {
-        if (auto parent_split = old_parent->as_split_node()) {
-            if (parent_split->children.size() == 1) {
-                auto only_child = 
-                    parent_split->remove_child(parent_split->get_last_active_node());
-
-                if (auto vnode = only_child->as_view_node())
-                    vnode->prefered_split_type = parent_split->split_type;
-
-                parent_split->parent->swap_child(parent_split, std::move(only_child));
-            }
-        }
-    }
-
-    ws->set_active_child(active);
-    return true;
-}
-
 std::unique_ptr<view_node_t> swayfire_t::init_view_node(wayfire_view view) {
     auto node = std::make_unique<view_node_t>(view, output);
     view->store_data<view_data_t>(std::make_unique<view_data_t>(node));
@@ -904,48 +851,6 @@ void swayfire_t::unbind_signals() {
     output->disconnect_signal(&on_view_unmapped);
     output->disconnect_signal(&on_view_attached);
     wf::get_core().disconnect_signal(&on_shutdown);
-}
-
-void swayfire_t::bind_keys() {
-    output->add_key(key_toggle_split_direction, &on_toggle_split_direction);
-
-    output->add_key(key_set_want_vsplit, &on_set_want_vsplit);
-    output->add_key(key_set_want_hsplit, &on_set_want_hsplit);
-
-    output->add_key(key_focus_left, &on_focus_left);
-    output->add_key(key_focus_right, &on_focus_right);
-    output->add_key(key_focus_down, &on_focus_down);
-    output->add_key(key_focus_up, &on_focus_up);
-
-    output->add_key(key_toggle_focus_tile, &on_toggle_focus_tile);
-
-    output->add_key(key_move_left, &on_move_left);
-    output->add_key(key_move_right, &on_move_right);
-    output->add_key(key_move_down, &on_move_down);
-    output->add_key(key_move_up, &on_move_up);
-
-    output->add_key(key_toggle_tile, &on_toggle_tile);
-}
-
-void swayfire_t::unbind_keys() {
-    output->rem_binding(&on_toggle_tile);
-
-    output->rem_binding(&on_move_up);
-    output->rem_binding(&on_move_down);
-    output->rem_binding(&on_move_right);
-    output->rem_binding(&on_move_left);
-
-    output->rem_binding(&on_toggle_focus_tile);
-
-    output->rem_binding(&on_focus_up);
-    output->rem_binding(&on_focus_down);
-    output->rem_binding(&on_focus_right);
-    output->rem_binding(&on_focus_left);
-
-    output->rem_binding(&on_set_want_hsplit);
-    output->rem_binding(&on_set_want_vsplit);
-
-    output->rem_binding(&on_toggle_split_direction);
 }
 
 void swayfire_t::init() {

@@ -8,6 +8,7 @@
 #include <vector>
 #include <variant>
 
+#include <wayfire/config/types.hpp>
 #include <wayfire/core.hpp>
 #include <wayfire/geometry.hpp>
 #include <wayfire/nonstd/observer_ptr.h>
@@ -382,71 +383,21 @@ class swayfire_t : public wf::plugin_interface_t {
         wf::option_wrapper_t<wf::buttonbinding_t>
             button_resize_activate{"swayfire/button_resize_activate"};
 
+        std::vector<std::unique_ptr<wf::key_callback>> key_callbacks;
 
-        wf::key_callback on_toggle_split_direction = [&](auto){
-            auto wsid = output->workspace->get_current_workspace();
-            auto ws = workspaces.get(wsid);
-
-            if (ws->get_active_node() && ws->get_active_node()->parent) {
-                ws->toggle_split_direction_node(ws->get_active_node());
-                return true;
-            }
-            return false;
-        };
-
-        wf::key_callback on_set_want_vsplit = [&](auto){
-            auto wsid = output->workspace->get_current_workspace();
-            auto ws = workspaces.get(wsid);
-            if (auto vnode = ws->get_active_node()->as_view_node()) {
-                vnode->prefered_split_type = split_type_t::VSPLIT;
-                return true;
-            }
-            return false;
-        };
-
-        wf::key_callback on_set_want_hsplit = [&](auto){
-            auto wsid = output->workspace->get_current_workspace();
-            auto ws = workspaces.get(wsid);
-            if (auto vnode = ws->get_active_node()->as_view_node()) {
-                vnode->prefered_split_type = split_type_t::HSPLIT;
-                return true;
-            }
-            return false;
-        };
-
-        wf::key_callback on_focus_left = [&](auto){ return focus_direction(direction_t::LEFT); };
-        wf::key_callback on_focus_right = [&](auto){ return focus_direction(direction_t::RIGHT); };
-        wf::key_callback on_focus_down = [&](auto){ return focus_direction(direction_t::DOWN); };
-        wf::key_callback on_focus_up = [&](auto){ return focus_direction(direction_t::UP); };
-
-        wf::key_callback on_toggle_focus_tile = [&](auto){
-            auto wsid = output->workspace->get_current_workspace();
-            auto ws = workspaces.get(wsid);
-            if (ws->get_active_node()->get_floating()) {
-                if (auto tiled = ws->get_active_tiled_node())
-                    ws->set_active_node(tiled);
-                else
-                    return false;
-            } else {
-                if (auto floating = ws->get_active_floating_node())
-                    ws->set_active_node(floating);
-                else
-                    return false;
-            }
-            return true;
-        };
-
-        wf::key_callback on_move_left = [&](auto){ return move_direction(direction_t::LEFT); };
-        wf::key_callback on_move_right = [&](auto){ return move_direction(direction_t::RIGHT); };
-        wf::key_callback on_move_down = [&](auto){ return move_direction(direction_t::DOWN); };
-        wf::key_callback on_move_up = [&](auto){ return move_direction(direction_t::UP); };
-
-        wf::key_callback on_toggle_tile = [&](auto){
-            auto wsid = output->workspace->get_current_workspace();
-            auto ws = workspaces.get(wsid);
-            ws->toggle_tile_node(ws->get_active_node());
-            return true;
-        };
+        bool on_toggle_split_direction(wf::keybinding_t);
+        bool on_set_want_vsplit(wf::keybinding_t);
+        bool on_set_want_hsplit(wf::keybinding_t);
+        bool on_focus_left(wf::keybinding_t);
+        bool on_focus_right(wf::keybinding_t);
+        bool on_focus_down(wf::keybinding_t);
+        bool on_focus_up(wf::keybinding_t);
+        bool on_toggle_focus_tile(wf::keybinding_t);
+        bool on_move_left(wf::keybinding_t);
+        bool on_move_right(wf::keybinding_t);
+        bool on_move_down(wf::keybinding_t);
+        bool on_move_up(wf::keybinding_t);
+        bool on_toggle_tile(wf::keybinding_t);
 
         wf::button_callback on_move_activate;
         wf::button_callback on_resize_activate;
