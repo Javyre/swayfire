@@ -1,4 +1,5 @@
 #include "swayfire.hpp"
+#include "grab.hpp"
 #include <algorithm>
 #include <functional>
 #include <iterator>
@@ -64,6 +65,16 @@ split_node_ref_t node_interface_t::as_split_node() {
 
 view_node_ref_t node_interface_t::as_view_node() {
     return dynamic_cast<view_node_t *>(this);
+}
+
+node_t node_interface_t::find_floating_parent() {
+    if (get_floating())
+        return this;
+
+    if (auto p = parent->as_split_node())
+        return p->find_floating_parent();
+
+    return nullptr;
 }
 
 // view_node_t
@@ -962,6 +973,8 @@ void swayfire_t::init() {
         }
     }
 
+    init_grab_interface();
+
     bind_signals();
     bind_keys();
 }
@@ -972,6 +985,8 @@ void swayfire_t::fini() {
     unbind_keys();
     unbind_signals();
 
+    fini_grab_interface();
+
     if (!is_shutting_down()) {
         auto views = output->workspace->get_views_in_layer(wf::ALL_LAYERS);
 
@@ -981,5 +996,7 @@ void swayfire_t::fini() {
 
     output->workspace->set_workspace_implementation(nullptr, true);
 }
+
+swayfire_t::~swayfire_t() = default;
 
 DECLARE_WAYFIRE_PLUGIN(swayfire_t)

@@ -76,5 +76,17 @@
         <default>&lt;super&gt; &lt;shift&gt; KEY_SPACE</default>
     </option>
 
+
+    <option name="button_move_activate" type="button">
+        <_short>Activate move</_short>
+        <_long>When the specified button is held down, you can drag windows to move them.</_long>
+        <default>&lt;super&gt; BTN_LEFT</default>
+    </option>
+    <option name="button_resize_activate" type="button">
+        <_short>Activate resize</_short>
+        <_long>When the specified button is held down, you can drag windows to resize them.</_long>
+        <default>&lt;super&gt; BTN_RIGHT</default>
+    </option>
+
 	</plugin>
 </wayfire>

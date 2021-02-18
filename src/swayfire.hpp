@@ -44,7 +44,7 @@ enum struct direction_t : uint8_t {
     UP, DOWN, LEFT, RIGHT,
 };
 
-direction_t opposite_dir(direction_t dir) {
+inline direction_t opposite_dir(direction_t dir) {
     switch (dir) {
         case direction_t::LEFT:
             return direction_t::RIGHT;
@@ -81,12 +81,12 @@ class display_interface_t {
         virtual ~display_interface_t() = default;
 };
 
-std::ostream& operator<<(std::ostream& os, const display_interface_t& n) {
+inline std::ostream& operator<<(std::ostream& os, const display_interface_t& n) {
     return n.to_stream(os);
 }
 
 template <class T>
-std::ostream& operator<<(std::ostream& os, const nonstd::observer_ptr<T>& n) {
+inline std::ostream& operator<<(std::ostream& os, const nonstd::observer_ptr<T>& n) {
     if (n) return n->to_stream(os);
     os << "(null)";
     return os;
@@ -143,6 +143,8 @@ class node_interface_t : public virtual display_interface_t {
         virtual void set_wsid(wf::point_t wsid) = 0;
 
         virtual node_parent_t get_active_parent_node() = 0;
+
+        node_t find_floating_parent();
 
         virtual ~node_interface_t() = default;
 };
@@ -326,6 +328,11 @@ inline bool is_shutting_down() {
     return wf::get_core().get_current_state() == wf::compositor_state_t::SHUTDOWN;
 }
 
+class active_grab_t;
+class active_button_drag_t;
+class active_move_t;
+class active_resize_t;
+
 class swayfire_t : public wf::plugin_interface_t {
     private:
         workspaces_t workspaces;
@@ -368,6 +375,12 @@ class swayfire_t : public wf::plugin_interface_t {
 
         wf::option_wrapper_t<wf::keybinding_t>
             key_toggle_tile{"swayfire/key_toggle_tile"};
+
+        wf::option_wrapper_t<wf::buttonbinding_t>
+            button_move_activate{"swayfire/button_move_activate"};
+
+        wf::option_wrapper_t<wf::buttonbinding_t>
+            button_resize_activate{"swayfire/button_resize_activate"};
 
 
         wf::key_callback on_toggle_split_direction = [&](auto){
@@ -435,6 +448,9 @@ class swayfire_t : public wf::plugin_interface_t {
             return true;
         };
 
+        wf::button_callback on_move_activate;
+        wf::button_callback on_resize_activate;
+
         wf::signal_connection_t on_shutdown = [&](wf::signal_data_t *) {
             output->disconnect_signal(&on_view_unmapped);
         };
@@ -485,9 +501,23 @@ class swayfire_t : public wf::plugin_interface_t {
 
         bool focus_direction(direction_t dir);
         bool move_direction(direction_t dir);
+
     public:
         void init() override;
         void fini() override;
+        ~swayfire_t() override;
+
+    private:
+        // grab interface
+        std::unique_ptr<active_grab_t> active_grab;
+
+        void init_grab_interface();
+        void fini_grab_interface();
+
+        friend class active_grab_t;
+        friend class active_button_drag_t;
+        friend class active_move_t;
+        friend class active_resize_t;
 };
 
 #endif // ifndef SWAYFIRE_HPP
