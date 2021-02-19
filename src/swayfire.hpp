@@ -341,43 +341,23 @@ class Swayfire : public wf::plugin_interface_t {
   private:
     Workspaces workspaces;
 
-    wf::option_wrapper_t<wf::keybinding_t> key_toggle_split_direction{
-        "swayfire/key_toggle_split_direction"};
+#define DECL_KEY(NAME)                                                         \
+    wf::option_wrapper_t<wf::keybinding_t>(NAME){"swayfire/" #NAME};
 
-    wf::option_wrapper_t<wf::keybinding_t> key_set_want_vsplit{
-        "swayfire/key_set_want_vsplit"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_set_want_hsplit{
-        "swayfire/key_set_want_hsplit"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_focus_left{
-        "swayfire/key_focus_left"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_focus_right{
-        "swayfire/key_focus_right"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_focus_down{
-        "swayfire/key_focus_down"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_focus_up{
-        "swayfire/key_focus_up"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_toggle_focus_tile{
-        "swayfire/key_toggle_focus_tile"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_move_left{
-        "swayfire/key_move_left"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_move_right{
-        "swayfire/key_move_right"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_move_down{
-        "swayfire/key_move_down"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_move_up{"swayfire/key_move_up"};
-
-    wf::option_wrapper_t<wf::keybinding_t> key_toggle_tile{
-        "swayfire/key_toggle_tile"};
+    DECL_KEY(key_toggle_split_direction);
+    DECL_KEY(key_set_want_vsplit);
+    DECL_KEY(key_set_want_hsplit);
+    DECL_KEY(key_focus_left);
+    DECL_KEY(key_focus_right);
+    DECL_KEY(key_focus_down);
+    DECL_KEY(key_focus_up);
+    DECL_KEY(key_toggle_focus_tile);
+    DECL_KEY(key_move_left);
+    DECL_KEY(key_move_right);
+    DECL_KEY(key_move_down);
+    DECL_KEY(key_move_up);
+    DECL_KEY(key_toggle_tile);
+#undef DECL_KEY
 
     wf::option_wrapper_t<wf::buttonbinding_t> button_move_activate{
         "swayfire/button_move_activate"};
