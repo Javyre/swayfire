@@ -142,8 +142,8 @@ void Swayfire::bind_keys() {
 
 #define ADD_KEY(KEY, BIND)                                                     \
     {                                                                          \
-        auto mem_fn = std::bind(std::mem_fn(&Swayfire::BIND), this, _1);       \
-        auto cb = std::make_unique<wf::key_callback>(mem_fn);                  \
+        auto cb = std::make_unique<wf::key_callback>(                          \
+            [&](auto b) { return BIND(b); });                                  \
         output->add_key(KEY, cb.get());                                        \
         key_callbacks.push_back(std::move(cb));                                \
     }
@@ -166,6 +166,7 @@ void Swayfire::bind_keys() {
     ADD_KEY(key_move_up, on_move_up);
 
     ADD_KEY(key_toggle_tile, on_toggle_tile);
+#undef ADD_KEY
 }
 
 void Swayfire::unbind_keys() {
