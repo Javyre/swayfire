@@ -23,60 +23,60 @@
 
 #define FLOATING_MOVE_STEP 5
 
-using output_ref_t = nonstd::observer_ptr<wf::output_t>;
+using OutputRef = nonstd::observer_ptr<wf::output_t>;
 
 namespace nonwf {
 
-wf::point_t get_view_workspace(wayfire_view view, output_ref_t output);
+wf::point_t get_view_workspace(wayfire_view view, OutputRef output);
 
 // Convert workspace-local geo to relative-to-current-workspace geo
 wf::geometry_t local_to_relative_geometry(wf::geometry_t geo, wf::point_t wsid,
-                                          output_ref_t output);
+                                          OutputRef output);
 
 wf::point_t geometry_center(wf::geometry_t geo);
 
 } // namespace nonwf
 
-enum struct split_type_t : uint8_t {
+enum struct SplitType : uint8_t {
     VSPLIT,
     HSPLIT,
     TABBED,
     STACKED,
 };
 
-enum struct direction_t : uint8_t {
+enum struct Direction : uint8_t {
     UP,
     DOWN,
     LEFT,
     RIGHT,
 };
 
-inline direction_t opposite_dir(direction_t dir) {
+inline Direction opposite_dir(Direction dir) {
     switch (dir) {
-    case direction_t::LEFT:
-        return direction_t::RIGHT;
-    case direction_t::RIGHT:
-        return direction_t::LEFT;
+    case Direction::LEFT:
+        return Direction::RIGHT;
+    case Direction::RIGHT:
+        return Direction::LEFT;
 
-    case direction_t::DOWN:
-        return direction_t::UP;
-    case direction_t::UP:
-        return direction_t::DOWN;
+    case Direction::DOWN:
+        return Direction::UP;
+    case Direction::UP:
+        return Direction::DOWN;
     }
 }
 
-class node_interface_t;
-class split_node_t;
-class view_node_t;
+class INode;
+class SplitNode;
+class ViewNode;
 
-using owned_node_t = std::unique_ptr<node_interface_t>;
-using node_t = nonstd::observer_ptr<node_interface_t>;
-using node_iter_t = std::vector<owned_node_t>::iterator;
+using OwnedNode = std::unique_ptr<INode>;
+using Node = nonstd::observer_ptr<INode>;
+using NodeIter = std::vector<OwnedNode>::iterator;
 
-using split_node_ref_t = nonstd::observer_ptr<split_node_t>;
-using view_node_ref_t = nonstd::observer_ptr<view_node_t>;
+using SplitNodeRef = nonstd::observer_ptr<SplitNode>;
+using ViewNodeRef = nonstd::observer_ptr<ViewNode>;
 
-class display_interface_t {
+class IDisplay {
   public:
     virtual std::string to_string() const {
         std::ostringstream out;
@@ -85,11 +85,10 @@ class display_interface_t {
     };
     virtual std::ostream &to_stream(std::ostream &os) const = 0;
 
-    virtual ~display_interface_t() = default;
+    virtual ~IDisplay() = default;
 };
 
-inline std::ostream &operator<<(std::ostream &os,
-                                const display_interface_t &n) {
+inline std::ostream &operator<<(std::ostream &os, const IDisplay &n) {
     return n.to_stream(os);
 }
 
@@ -102,47 +101,46 @@ inline std::ostream &operator<<(std::ostream &os,
     return os;
 }
 
-class node_parent_interface_t : public virtual display_interface_t {
+class INodeParent : public virtual IDisplay {
   public:
-    split_node_ref_t as_split_node();
+    SplitNodeRef as_split_node();
 
-    virtual node_t get_adjacent(node_t node, direction_t dir) = 0;
-    virtual bool move_child(node_t node, direction_t dir) = 0;
+    virtual Node get_adjacent(Node node, Direction dir) = 0;
+    virtual bool move_child(Node node, Direction dir) = 0;
 
-    virtual node_t get_last_active_node() = 0;
+    virtual Node get_last_active_node() = 0;
 
-    virtual void insert_child(owned_node_t node) = 0;
-    virtual owned_node_t remove_child(node_t node) = 0;
-    virtual owned_node_t swap_child(node_t node, owned_node_t other) = 0;
-    virtual void set_active_child(node_t node) = 0;
+    virtual void insert_child(OwnedNode node) = 0;
+    virtual OwnedNode remove_child(Node node) = 0;
+    virtual OwnedNode swap_child(Node node, OwnedNode other) = 0;
+    virtual void set_active_child(Node node) = 0;
 
-    virtual ~node_parent_interface_t() = default;
+    virtual ~INodeParent() = default;
 };
 
-using node_parent_t = nonstd::observer_ptr<node_parent_interface_t>;
+using NodeParent = nonstd::observer_ptr<INodeParent>;
 
 static uint id_counter;
 
-class swayfire_t;
+class Swayfire;
 
-class node_interface_t : public virtual display_interface_t {
+class INode : public virtual IDisplay {
   protected:
     bool floating = false;
     wf::point_t wsid = {0, 0};
     wf::geometry_t geometry;
     uint node_id;
-    output_ref_t output;
+    OutputRef output;
 
-    node_interface_t(output_ref_t output)
-        : node_id(id_counter), output(output) {
+    INode(OutputRef output) : node_id(id_counter), output(output) {
         id_counter++;
     }
 
   public:
-    node_parent_t parent;
+    NodeParent parent;
 
-    split_node_ref_t as_split_node();
-    view_node_ref_t as_view_node();
+    SplitNodeRef as_split_node();
+    ViewNodeRef as_view_node();
 
     virtual wf::geometry_t get_geometry() { return geometry; }
     virtual void set_geometry(wf::geometry_t geo) = 0;
@@ -154,27 +152,26 @@ class node_interface_t : public virtual display_interface_t {
     wf::point_t get_wsid() { return wsid; };
     virtual void set_wsid(wf::point_t wsid) = 0;
 
-    virtual node_parent_t get_active_parent_node() = 0;
+    virtual NodeParent get_active_parent_node() = 0;
 
-    node_t find_floating_parent();
+    Node find_floating_parent();
 
-    virtual ~node_interface_t() = default;
+    virtual ~INode() = default;
 };
 
-class view_node_t : public node_interface_t {
+class ViewNode : public INode {
   public:
     wayfire_view view;
-    std::optional<split_type_t> prefered_split_type;
+    std::optional<SplitType> prefered_split_type;
 
-    view_node_t(wayfire_view view, output_ref_t output)
-        : node_interface_t(output), view(view) {}
+    ViewNode(wayfire_view view, OutputRef output) : INode(output), view(view) {}
 
     wf::geometry_t get_geometry() override;
     void set_geometry(wf::geometry_t geo) override;
     void set_floating(bool fl) override;
     void set_wsid(wf::point_t wsid) override;
-    split_node_ref_t replace_with_split();
-    node_parent_t get_active_parent_node() override;
+    SplitNodeRef replace_with_split();
+    NodeParent get_active_parent_node() override;
 
     std::ostream &to_stream(std::ostream &os) const override {
         os << "view-node-" << node_id;
@@ -182,52 +179,50 @@ class view_node_t : public node_interface_t {
     }
 };
 
-struct view_data_t : wf::custom_data_t {
-    view_node_ref_t node;
+struct ViewData : wf::custom_data_t {
+    ViewNodeRef node;
 
-    view_data_t(view_node_ref_t node) : node(node) {}
+    ViewData(ViewNodeRef node) : node(node) {}
 };
 
-class split_node_t : public node_interface_t, public node_parent_interface_t {
+class SplitNode : public INode, public INodeParent {
   private:
-    std::vector<owned_node_t>::iterator find_child(node_t node);
-    bool move_child_outside(node_iter_t child, direction_t dir);
-    split_node_ref_t find_parent_split(bool horiz);
+    NodeIter find_child(Node node);
+    bool move_child_outside(NodeIter child, Direction dir);
+    SplitNodeRef find_parent_split(bool horiz);
 
   public:
-    split_type_t split_type = split_type_t::VSPLIT;
+    SplitType split_type = SplitType::VSPLIT;
     uint32_t active_child = 0;
     std::vector<float> children_ratios;
-    std::vector<owned_node_t> children;
+    std::vector<OwnedNode> children;
 
-    split_node_t(wf::geometry_t geo, output_ref_t output)
-        : node_interface_t(output) {
+    SplitNode(wf::geometry_t geo, OutputRef output) : INode(output) {
         geometry = geo;
     }
 
-    void insert_child_at(std::vector<owned_node_t>::iterator at,
-                         owned_node_t node);
-    void insert_child_front(owned_node_t node);
-    void insert_child_back(owned_node_t node);
-    void insert_child_front_of(node_t of, owned_node_t node);
-    void insert_child_back_of(node_t of, owned_node_t node);
-    void insert_child(owned_node_t node) override {
+    void insert_child_at(std::vector<OwnedNode>::iterator at, OwnedNode node);
+    void insert_child_front(OwnedNode node);
+    void insert_child_back(OwnedNode node);
+    void insert_child_front_of(Node of, OwnedNode node);
+    void insert_child_back_of(Node of, OwnedNode node);
+    void insert_child(OwnedNode node) override {
         insert_child_back(std::move(node));
     };
 
-    owned_node_t remove_child(node_t node) override;
-    void set_active_child(node_t node) override;
+    OwnedNode remove_child(Node node) override;
+    void set_active_child(Node node) override;
 
     void set_geometry(wf::geometry_t geo) override;
     void set_floating(bool fl) override;
     void set_wsid(wf::point_t wsid) override;
-    node_parent_t get_active_parent_node() override;
-    owned_node_t swap_child(node_t node, owned_node_t other) override;
+    NodeParent get_active_parent_node() override;
+    OwnedNode swap_child(Node node, OwnedNode other) override;
 
-    node_t get_last_active_node() override;
+    Node get_last_active_node() override;
 
-    node_t get_adjacent(node_t node, direction_t dir) override;
-    bool move_child(node_t node, direction_t dir) override;
+    Node get_adjacent(Node node, Direction dir) override;
+    bool move_child(Node node, Direction dir) override;
 
     std::ostream &to_stream(std::ostream &os) const override {
         os << "split-node-" << node_id;
@@ -235,63 +230,63 @@ class split_node_t : public node_interface_t, public node_parent_interface_t {
     }
 };
 
-class workspace_t : public node_parent_interface_t {
+class Workspace : public INodeParent {
   public:
     wf::point_t wsid;
     wf::geometry_t geometry;
-    std::unique_ptr<split_node_t> tiled_root;
-    std::vector<owned_node_t> floating_nodes;
-    output_ref_t output;
+    std::unique_ptr<SplitNode> tiled_root;
+    std::vector<OwnedNode> floating_nodes;
+    OutputRef output;
 
   private:
-    node_t active_node;
-    node_t active_tiled_node;
+    Node active_node;
+    Node active_tiled_node;
     uint32_t active_floating = 0;
 
-    std::vector<owned_node_t>::iterator find_floating(node_t node);
+    std::vector<OwnedNode>::iterator find_floating(Node node);
 
   public:
-    workspace_t(wf::point_t wsid, wf::geometry_t geo, output_ref_t output)
+    Workspace(wf::point_t wsid, wf::geometry_t geo, OutputRef output)
         : wsid(wsid), geometry(geo), output(output) {
-        (void)swap_tiled_root(std::make_unique<split_node_t>(geo, output));
+        (void)swap_tiled_root(std::make_unique<SplitNode>(geo, output));
         LOGD("ws created with root ", tiled_root->to_string());
         active_node = tiled_root;
     };
 
-    workspace_t(workspace_t &) = delete;
-    workspace_t(workspace_t &&) = default;
-    workspace_t &operator=(workspace_t &&) = default;
+    Workspace(Workspace &) = delete;
+    Workspace(Workspace &&) = default;
+    Workspace &operator=(Workspace &&) = default;
 
-    void set_active_node(node_t node);
-    node_t get_active_node();
+    void set_active_node(Node node);
+    Node get_active_node();
 
-    node_parent_t get_active_parent_node();
+    NodeParent get_active_parent_node();
 
     // Floating nodes are always direct children of the workspace
-    void insert_floating_node(owned_node_t node);
-    owned_node_t remove_floating_node(node_t node);
-    owned_node_t swap_floating_node(node_t node, owned_node_t other);
-    node_t get_active_floating_node();
+    void insert_floating_node(OwnedNode node);
+    OwnedNode remove_floating_node(Node node);
+    OwnedNode swap_floating_node(Node node, OwnedNode other);
+    Node get_active_floating_node();
 
-    owned_node_t swap_tiled_root(std::unique_ptr<split_node_t> other);
+    OwnedNode swap_tiled_root(std::unique_ptr<SplitNode> other);
 
     // These methods will find the node in the workspace
-    void insert_tiled_node(owned_node_t node);
-    owned_node_t remove_tiled_node(node_t node);
-    node_t get_active_tiled_node();
-    owned_node_t remove_node(node_t node);
-    void toggle_tile_node(node_t node);
-    void toggle_split_direction_node(node_t node);
-    node_t get_last_active_node() override;
-    node_t get_adjacent(node_t node, direction_t dir) override;
-    bool move_child(node_t node, direction_t dir) override;
+    void insert_tiled_node(OwnedNode node);
+    OwnedNode remove_tiled_node(Node node);
+    Node get_active_tiled_node();
+    OwnedNode remove_node(Node node);
+    void toggle_tile_node(Node node);
+    void toggle_split_direction_node(Node node);
+    Node get_last_active_node() override;
+    Node get_adjacent(Node node, Direction dir) override;
+    bool move_child(Node node, Direction dir) override;
 
     // These methods work with only direct children of the workspace
     // They will not walk the tree like other methods would
-    void insert_child(owned_node_t node) override;
-    owned_node_t remove_child(node_t node) override;
-    owned_node_t swap_child(node_t node, owned_node_t other) override;
-    void set_active_child(node_t node) override;
+    void insert_child(OwnedNode node) override;
+    OwnedNode remove_child(Node node) override;
+    OwnedNode swap_child(Node node, OwnedNode other) override;
+    void set_active_child(Node node) override;
 
     void set_workarea(wf::geometry_t geo);
     wf::geometry_t get_geometry() { return geometry; }
@@ -302,31 +297,30 @@ class workspace_t : public node_parent_interface_t {
     }
 };
 
-using workspace_ref_t = nonstd::observer_ptr<workspace_t>;
-struct workspaces_t {
+using WorkspaceRef = nonstd::observer_ptr<Workspace>;
+struct Workspaces {
     // Workspace tree roots: workspaces[x][y]
-    std::vector<std::vector<std::unique_ptr<workspace_t>>> workspaces;
+    std::vector<std::vector<std::unique_ptr<Workspace>>> workspaces;
 
     void update_dims(wf::dimensions_t ndims, wf::geometry_t geo,
-                     output_ref_t output);
+                     OutputRef output);
 
-    workspace_ref_t get(wf::point_t ws);
+    WorkspaceRef get(wf::point_t ws);
 
-    void for_each(std::function<void(workspace_ref_t)> fun);
+    void for_each(std::function<void(WorkspaceRef)> fun);
 };
 
-class swayfire_workspace_implementation_t
-    : public wf::workspace_implementation_t {
+class SwayfireWorkspaceImpl : public wf::workspace_implementation_t {
   public:
     bool view_movable(wayfire_view view) override {
-        if (auto vdata = view->get_data<view_data_t>())
+        if (auto vdata = view->get_data<ViewData>())
             return vdata->node->get_floating();
 
         return false;
     }
 
     bool view_resizable(wayfire_view view) override {
-        if (auto vdata = view->get_data<view_data_t>())
+        if (auto vdata = view->get_data<ViewData>())
             return vdata->node->get_floating();
 
         return false;
@@ -338,14 +332,14 @@ inline bool is_shutting_down() {
            wf::compositor_state_t::SHUTDOWN;
 }
 
-class active_grab_t;
-class active_button_drag_t;
-class active_move_t;
-class active_resize_t;
+class IActiveGrab;
+class IActiveButtonDrag;
+class ActiveMove;
+class ActiveResize;
 
-class swayfire_t : public wf::plugin_interface_t {
+class Swayfire : public wf::plugin_interface_t {
   private:
-    workspaces_t workspaces;
+    Workspaces workspaces;
 
     wf::option_wrapper_t<wf::keybinding_t> key_toggle_split_direction{
         "swayfire/key_toggle_split_direction"};
@@ -434,7 +428,7 @@ class swayfire_t : public wf::plugin_interface_t {
 
     wf::signal_connection_t on_view_focused = [&](wf::signal_data_t *data) {
         auto view = wf::get_signaled_view(data);
-        if (auto vdata = view->get_data<view_data_t>()) {
+        if (auto vdata = view->get_data<ViewData>()) {
             auto node = vdata->node;
 
             workspaces.get(node->get_wsid())->set_active_node(node);
@@ -455,27 +449,27 @@ class swayfire_t : public wf::plugin_interface_t {
     void bind_keys();
     void unbind_keys();
 
-    std::unique_ptr<view_node_t> init_view_node(wayfire_view view);
+    std::unique_ptr<ViewNode> init_view_node(wayfire_view view);
 
-    bool focus_direction(direction_t dir);
-    bool move_direction(direction_t dir);
+    bool focus_direction(Direction dir);
+    bool move_direction(Direction dir);
 
   public:
     void init() override;
     void fini() override;
-    ~swayfire_t() override;
+    ~Swayfire() override;
 
   private:
     // grab interface
-    std::unique_ptr<active_grab_t> active_grab;
+    std::unique_ptr<IActiveGrab> active_grab;
 
     void init_grab_interface();
     void fini_grab_interface();
 
-    friend class active_grab_t;
-    friend class active_button_drag_t;
-    friend class active_move_t;
-    friend class active_resize_t;
+    friend class IActiveGrab;
+    friend class IActiveButtonDrag;
+    friend class ActiveMove;
+    friend class ActiveResize;
 };
 
 #endif // ifndef SWAYFIRE_HPP

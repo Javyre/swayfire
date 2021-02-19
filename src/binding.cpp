@@ -1,20 +1,20 @@
 #include "swayfire.hpp"
 
-// swayfire_t
+// Swayfire
 
-void workspace_t::toggle_split_direction_node(node_t node) {
+void Workspace::toggle_split_direction_node(Node node) {
     if (auto parent = node->parent->as_split_node()) {
         LOGD("Toggling split dir: ", parent);
 
-        parent->split_type = (parent->split_type == split_type_t::HSPLIT)
-                                 ? split_type_t::VSPLIT
-                                 : split_type_t::HSPLIT;
+        parent->split_type = (parent->split_type == SplitType::HSPLIT)
+                                 ? SplitType::VSPLIT
+                                 : SplitType::HSPLIT;
 
         parent->refresh_geometry();
     }
 }
 
-bool swayfire_t::on_toggle_split_direction(wf::keybinding_t) {
+bool Swayfire::on_toggle_split_direction(wf::keybinding_t) {
     auto wsid = output->workspace->get_current_workspace();
     auto ws = workspaces.get(wsid);
 
@@ -25,27 +25,27 @@ bool swayfire_t::on_toggle_split_direction(wf::keybinding_t) {
     return false;
 }
 
-bool swayfire_t::on_set_want_vsplit(wf::keybinding_t) {
+bool Swayfire::on_set_want_vsplit(wf::keybinding_t) {
     auto wsid = output->workspace->get_current_workspace();
     auto ws = workspaces.get(wsid);
     if (auto vnode = ws->get_active_node()->as_view_node()) {
-        vnode->prefered_split_type = split_type_t::VSPLIT;
+        vnode->prefered_split_type = SplitType::VSPLIT;
         return true;
     }
     return false;
 }
 
-bool swayfire_t::on_set_want_hsplit(wf::keybinding_t) {
+bool Swayfire::on_set_want_hsplit(wf::keybinding_t) {
     auto wsid = output->workspace->get_current_workspace();
     auto ws = workspaces.get(wsid);
     if (auto vnode = ws->get_active_node()->as_view_node()) {
-        vnode->prefered_split_type = split_type_t::HSPLIT;
+        vnode->prefered_split_type = SplitType::HSPLIT;
         return true;
     }
     return false;
 }
 
-bool swayfire_t::focus_direction(direction_t dir) {
+bool Swayfire::focus_direction(Direction dir) {
     auto wsid = output->workspace->get_current_workspace();
     auto ws = workspaces.get(wsid);
     auto active = ws->get_active_node();
@@ -59,20 +59,20 @@ bool swayfire_t::focus_direction(direction_t dir) {
     return false;
 }
 
-bool swayfire_t::on_focus_left(wf::keybinding_t) {
-    return focus_direction(direction_t::LEFT);
+bool Swayfire::on_focus_left(wf::keybinding_t) {
+    return focus_direction(Direction::LEFT);
 }
-bool swayfire_t::on_focus_right(wf::keybinding_t) {
-    return focus_direction(direction_t::RIGHT);
+bool Swayfire::on_focus_right(wf::keybinding_t) {
+    return focus_direction(Direction::RIGHT);
 }
-bool swayfire_t::on_focus_down(wf::keybinding_t) {
-    return focus_direction(direction_t::DOWN);
+bool Swayfire::on_focus_down(wf::keybinding_t) {
+    return focus_direction(Direction::DOWN);
 }
-bool swayfire_t::on_focus_up(wf::keybinding_t) {
-    return focus_direction(direction_t::UP);
+bool Swayfire::on_focus_up(wf::keybinding_t) {
+    return focus_direction(Direction::UP);
 }
 
-bool swayfire_t::on_toggle_focus_tile(wf::keybinding_t) {
+bool Swayfire::on_toggle_focus_tile(wf::keybinding_t) {
     auto wsid = output->workspace->get_current_workspace();
     auto ws = workspaces.get(wsid);
     if (ws->get_active_node()->get_floating()) {
@@ -89,7 +89,7 @@ bool swayfire_t::on_toggle_focus_tile(wf::keybinding_t) {
     return true;
 }
 
-bool swayfire_t::move_direction(direction_t dir) {
+bool Swayfire::move_direction(Direction dir) {
     auto wsid = output->workspace->get_current_workspace();
     auto ws = workspaces.get(wsid);
     auto active = ws->get_active_node();
@@ -117,32 +117,32 @@ bool swayfire_t::move_direction(direction_t dir) {
     return true;
 }
 
-bool swayfire_t::on_move_left(wf::keybinding_t) {
-    return move_direction(direction_t::LEFT);
+bool Swayfire::on_move_left(wf::keybinding_t) {
+    return move_direction(Direction::LEFT);
 }
-bool swayfire_t::on_move_right(wf::keybinding_t) {
-    return move_direction(direction_t::RIGHT);
+bool Swayfire::on_move_right(wf::keybinding_t) {
+    return move_direction(Direction::RIGHT);
 }
-bool swayfire_t::on_move_down(wf::keybinding_t) {
-    return move_direction(direction_t::DOWN);
+bool Swayfire::on_move_down(wf::keybinding_t) {
+    return move_direction(Direction::DOWN);
 }
-bool swayfire_t::on_move_up(wf::keybinding_t) {
-    return move_direction(direction_t::UP);
+bool Swayfire::on_move_up(wf::keybinding_t) {
+    return move_direction(Direction::UP);
 }
 
-bool swayfire_t::on_toggle_tile(wf::keybinding_t) {
+bool Swayfire::on_toggle_tile(wf::keybinding_t) {
     auto wsid = output->workspace->get_current_workspace();
     auto ws = workspaces.get(wsid);
     ws->toggle_tile_node(ws->get_active_node());
     return true;
 }
 
-void swayfire_t::bind_keys() {
+void Swayfire::bind_keys() {
     using namespace std::placeholders;
 
 #define ADD_KEY(KEY, BIND)                                                     \
     {                                                                          \
-        auto mem_fn = std::bind(std::mem_fn(&swayfire_t::BIND), this, _1);     \
+        auto mem_fn = std::bind(std::mem_fn(&Swayfire::BIND), this, _1);       \
         auto cb = std::make_unique<wf::key_callback>(mem_fn);                  \
         output->add_key(KEY, cb.get());                                        \
         key_callbacks.push_back(std::move(cb));                                \
@@ -168,7 +168,7 @@ void swayfire_t::bind_keys() {
     ADD_KEY(key_toggle_tile, on_toggle_tile);
 }
 
-void swayfire_t::unbind_keys() {
+void Swayfire::unbind_keys() {
     std::for_each(key_callbacks.rbegin(), key_callbacks.rend(),
                   [&](auto &cb) { output->rem_binding(cb.get()); });
 }

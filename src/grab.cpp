@@ -7,11 +7,11 @@
 #include <wayfire/nonstd/observer_ptr.h>
 #include <wayfire/plugin.hpp>
 
-// active_grab_t
+// IActiveGrab
 
-std::unique_ptr<active_grab_t> active_grab_t::try_activate(
-    nonstd::observer_ptr<swayfire_t> plugin,
-    std::function<std::unique_ptr<active_grab_t>()> cons) {
+std::unique_ptr<IActiveGrab>
+IActiveGrab::try_activate(nonstd::observer_ptr<Swayfire> plugin,
+                          std::function<std::unique_ptr<IActiveGrab>()> cons) {
 
     if (plugin->output->activate_plugin(plugin->grab_interface)) {
         if (plugin->grab_interface->grab()) {
@@ -24,34 +24,33 @@ std::unique_ptr<active_grab_t> active_grab_t::try_activate(
     return nullptr;
 }
 
-active_grab_t::~active_grab_t() {
+IActiveGrab::~IActiveGrab() {
     plugin->output->deactivate_plugin(plugin->grab_interface);
 }
 
-// active_button_drag_t
+// IActiveButtonDrag
 
-void active_button_drag_t::button(uint32_t b, uint32_t state) {
+void IActiveButtonDrag::button(uint32_t b, uint32_t state) {
     if (b == deactivate_button && state == WLR_BUTTON_RELEASED) {
         plugin->active_grab = nullptr;
     }
 }
 
-// active_move_t
+// ActiveMove
 
-void active_move_t::pointer_motion(uint32_t x, uint32_t y) {
+void ActiveMove::pointer_motion(uint32_t x, uint32_t y) {
     auto geo = original_geo;
     geo.x += x - pointer_start.x;
     geo.y += y - pointer_start.y;
     dragged->set_geometry(geo);
 }
 
-std::unique_ptr<active_grab_t>
-active_move_t::construct(nonstd::observer_ptr<swayfire_t> plugin,
-                         node_t dragged) {
+std::unique_ptr<IActiveGrab>
+ActiveMove::construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged) {
 
     return try_activate(plugin, [&]() {
-        auto ret = std::make_unique<active_move_t>(
-            plugin, plugin->button_move_activate);
+        auto ret =
+            std::make_unique<ActiveMove>(plugin, plugin->button_move_activate);
         auto p = wf::get_core().get_cursor_position();
 
         ret->dragged = dragged;
@@ -62,22 +61,21 @@ active_move_t::construct(nonstd::observer_ptr<swayfire_t> plugin,
     });
 }
 
-// active_resize_t
+// ActiveResize
 
-void active_resize_t::pointer_motion(uint32_t x, uint32_t y) {
+void ActiveResize::pointer_motion(uint32_t x, uint32_t y) {
     // TODO: impl drag resizing
 }
 
-std::unique_ptr<active_grab_t>
-active_resize_t::construct(nonstd::observer_ptr<swayfire_t> plugin,
-                           node_t dragged) {
+std::unique_ptr<IActiveGrab>
+ActiveResize::construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged) {
     // TODO: impl drag resizing
     return nullptr;
 }
 
-// swayfire_t
+// Swayfire
 
-void swayfire_t::init_grab_interface() {
+void Swayfire::init_grab_interface() {
     grab_interface->name = "swayfire";
     grab_interface->capabilities =
         wf::CAPABILITY_GRAB_INPUT | wf::CAPABILITY_MANAGE_DESKTOP;
@@ -100,9 +98,9 @@ void swayfire_t::init_grab_interface() {
 
     on_move_activate = [&](auto) {
         if (auto view = wf::get_core().get_cursor_focus_view()) {
-            if (auto vdata = view->get_data<view_data_t>()) {
+            if (auto vdata = view->get_data<ViewData>()) {
                 if (auto node = vdata->node->find_floating_parent()) {
-                    if (auto active = active_move_t::construct(this, node)) {
+                    if (auto active = ActiveMove::construct(this, node)) {
                         active_grab = std::move(active);
                         return true;
                     }
@@ -121,7 +119,7 @@ void swayfire_t::init_grab_interface() {
     output->add_button(button_resize_activate, &on_resize_activate);
 }
 
-void swayfire_t::fini_grab_interface() {
+void Swayfire::fini_grab_interface() {
     output->rem_binding(&on_resize_activate);
     output->rem_binding(&on_move_activate);
 
