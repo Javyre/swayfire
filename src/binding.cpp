@@ -7,8 +7,8 @@ void workspace_t::toggle_split_direction_node(node_t node) {
         LOGD("Toggling split dir: ", parent);
 
         parent->split_type = (parent->split_type == split_type_t::HSPLIT)
-            ? split_type_t::VSPLIT
-            : split_type_t::HSPLIT;
+                                 ? split_type_t::VSPLIT
+                                 : split_type_t::HSPLIT;
 
         parent->refresh_geometry();
     }
@@ -101,13 +101,14 @@ bool swayfire_t::move_direction(direction_t dir) {
     if (old_parent.get() != ws->tiled_root.get()) {
         if (auto parent_split = old_parent->as_split_node()) {
             if (parent_split->children.size() == 1) {
-                auto only_child = 
-                    parent_split->remove_child(parent_split->get_last_active_node());
+                auto only_child = parent_split->remove_child(
+                    parent_split->get_last_active_node());
 
                 if (auto vnode = only_child->as_view_node())
                     vnode->prefered_split_type = parent_split->split_type;
 
-                parent_split->parent->swap_child(parent_split, std::move(only_child));
+                parent_split->parent->swap_child(parent_split,
+                                                 std::move(only_child));
             }
         }
     }
@@ -139,12 +140,12 @@ bool swayfire_t::on_toggle_tile(wf::keybinding_t) {
 void swayfire_t::bind_keys() {
     using namespace std::placeholders;
 
-#define ADD_KEY(KEY, BIND)                                                 \
-    {                                                                      \
-        auto mem_fn = std::bind(std::mem_fn(&swayfire_t::BIND), this, _1); \
-        auto cb = std::make_unique<wf::key_callback>(mem_fn);              \
-        output->add_key(KEY, cb.get());                                    \
-        key_callbacks.push_back(std::move(cb));                            \
+#define ADD_KEY(KEY, BIND)                                                     \
+    {                                                                          \
+        auto mem_fn = std::bind(std::mem_fn(&swayfire_t::BIND), this, _1);     \
+        auto cb = std::make_unique<wf::key_callback>(mem_fn);                  \
+        output->add_key(KEY, cb.get());                                        \
+        key_callbacks.push_back(std::move(cb));                                \
     }
 
     ADD_KEY(key_toggle_split_direction, on_toggle_split_direction);
@@ -168,7 +169,6 @@ void swayfire_t::bind_keys() {
 }
 
 void swayfire_t::unbind_keys() {
-    std::for_each(key_callbacks.rbegin(), key_callbacks.rend(), [&](auto &cb) {
-        output->rem_binding(cb.get());
-    });
+    std::for_each(key_callbacks.rbegin(), key_callbacks.rend(),
+                  [&](auto &cb) { output->rem_binding(cb.get()); });
 }

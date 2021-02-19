@@ -12,8 +12,7 @@
 // nonwf
 
 // TODO: use wf::get_view_main_workspace once we upgrade to wayfire > 0.7
-wf::point_t nonwf::get_view_workspace(wayfire_view view, output_ref_t output)
-{
+wf::point_t nonwf::get_view_workspace(wayfire_view view, output_ref_t output) {
     auto og = output->get_screen_size();
 
     auto wm = view->transform_region(view->get_wm_geometry());
@@ -24,16 +23,15 @@ wf::point_t nonwf::get_view_workspace(wayfire_view view, output_ref_t output)
     auto curr = output->workspace->get_current_workspace();
 
     // convert relative coords to nearest absolute wsid coords
-    x = std::clamp(x + curr.x, 0, dims.width-1);
-    y = std::clamp(y + curr.y, 0, dims.height-1);
+    x = std::clamp(x + curr.x, 0, dims.width - 1);
+    y = std::clamp(y + curr.y, 0, dims.height - 1);
 
     return {x, y};
 }
 
-wf::geometry_t nonwf::local_to_relative_geometry(
-        wf::geometry_t geo,
-        wf::point_t wsid,
-        output_ref_t output) {
+wf::geometry_t nonwf::local_to_relative_geometry(wf::geometry_t geo,
+                                                 wf::point_t wsid,
+                                                 output_ref_t output) {
 
     auto og = output->get_screen_size();
     auto curr = output->workspace->get_current_workspace();
@@ -46,8 +44,8 @@ wf::geometry_t nonwf::local_to_relative_geometry(
 
 wf::point_t nonwf::geometry_center(wf::geometry_t geo) {
     return {
-        (int)std::floor((geo.x + geo.width) / 2.0f), 
-        (int)std::floor((geo.y + geo.height) / 2.0f), 
+        (int)std::floor((geo.x + geo.width) / 2.0f),
+        (int)std::floor((geo.y + geo.height) / 2.0f),
     };
 }
 
@@ -87,9 +85,7 @@ void view_node_t::set_floating(bool fl) {
     view->set_tiled(fl ? 0 : wf::TILED_EDGES_ALL);
 }
 
-void view_node_t::set_wsid(wf::point_t wsid) {
-    this->wsid = wsid;
-}
+void view_node_t::set_wsid(wf::point_t wsid) { this->wsid = wsid; }
 
 wf::geometry_t view_node_t::get_geometry() {
     geometry = view->get_wm_geometry();
@@ -103,7 +99,8 @@ void view_node_t::set_geometry(wf::geometry_t geo) {
 
 split_node_ref_t view_node_t::replace_with_split() {
     if (prefered_split_type) {
-        auto new_parent = std::make_unique<split_node_t>(get_geometry(), output);
+        auto new_parent =
+            std::make_unique<split_node_t>(get_geometry(), output);
         auto new_parent_ref = new_parent.get();
         new_parent->split_type = *prefered_split_type;
         auto owned_self = parent->swap_child(this, std::move(new_parent));
@@ -125,19 +122,20 @@ node_parent_t view_node_t::get_active_parent_node() {
 
 // split_node_t
 
-void split_node_t::insert_child_at(std::vector<owned_node_t>::iterator at, owned_node_t node) {
+void split_node_t::insert_child_at(std::vector<owned_node_t>::iterator at,
+                                   owned_node_t node) {
     node->parent = this;
 
-    float shrink_ratio = (float)children.size() / (float)(children.size()+1);
+    float shrink_ratio = (float)children.size() / (float)(children.size() + 1);
     float total_ratio = 0;
 
     for (auto i = children_ratios.begin(); i != children_ratios.end(); i++) {
         *i *= shrink_ratio;
         total_ratio += *i;
     }
-    children_ratios.insert(
-            children_ratios.begin()+std::distance(children.begin(), at),
-            1.0f-total_ratio);
+    children_ratios.insert(children_ratios.begin() +
+                               std::distance(children.begin(), at),
+                           1.0f - total_ratio);
 
     children.insert(at, std::move(node));
     refresh_geometry();
@@ -164,13 +162,12 @@ void split_node_t::insert_child_back_of(node_t of, owned_node_t node) {
     if (child == children.end())
         LOGE("Node ", of, " not found in split node: ", this);
 
-    insert_child_at(child+1, std::move(node));
+    insert_child_at(child + 1, std::move(node));
 }
 
 std::vector<owned_node_t>::iterator split_node_t::find_child(node_t node) {
-    return std::find_if(children.begin(), children.end(), [&](auto &c){
-        return c.get() == node.get();
-    });
+    return std::find_if(children.begin(), children.end(),
+                        [&](auto &c) { return c.get() == node.get(); });
 }
 
 owned_node_t split_node_t::remove_child(node_t node) {
@@ -178,16 +175,19 @@ owned_node_t split_node_t::remove_child(node_t node) {
     if (child == children.end())
         LOGE("Node ", node, " not found in split node: ", this);
 
-    children_ratios.erase(children_ratios.begin() + std::distance(children.begin(), child));
+    children_ratios.erase(children_ratios.begin() +
+                          std::distance(children.begin(), child));
 
     if (!children_ratios.empty()) {
-        float grow_ratio = (float)(children_ratios.size()+1) / (float)(children_ratios.size());
+        float grow_ratio = (float)(children_ratios.size() + 1) /
+                           (float)(children_ratios.size());
         float total_ratio = 0;
-        for (auto i = children_ratios.begin(); i != children_ratios.end()-1; i++) {
+        for (auto i = children_ratios.begin(); i != children_ratios.end() - 1;
+             i++) {
             *i *= grow_ratio;
             total_ratio += *i;
         }
-        children_ratios.back() = 1.0f-total_ratio;
+        children_ratios.back() = 1.0f - total_ratio;
     }
 
     auto owned_node = std::move(*child);
@@ -196,8 +196,8 @@ owned_node_t split_node_t::remove_child(node_t node) {
     if (children.empty()) {
         active_child = 0;
     } else {
-        active_child = 
-            std::clamp(active_child, (uint32_t)0, (uint32_t)(children.size()-1));
+        active_child = std::clamp(active_child, (uint32_t)0,
+                                  (uint32_t)(children.size() - 1));
     }
 
     refresh_geometry();
@@ -219,9 +219,7 @@ void split_node_t::set_active_child(node_t node) {
     parent->set_active_child(this);
 }
 
-node_parent_t split_node_t::get_active_parent_node() {
-    return this;
-}
+node_parent_t split_node_t::get_active_parent_node() { return this; }
 
 owned_node_t split_node_t::swap_child(node_t node, owned_node_t other) {
     auto child = find_child(node);
@@ -254,35 +252,39 @@ node_t split_node_t::get_adjacent(node_t node, direction_t dir) {
         LOGE("Node ", node, " not found in split node: ", this);
 
     switch (split_type) {
-        case split_type_t::VSPLIT: 
-        case split_type_t::TABBED:
-            {
-                switch (dir) {
-#define PREV_NODE child == children.begin() \
-                    ? parent->get_adjacent(this, dir) : (*(child-1)).get()
-#define NEXT_NODE child == (children.end()-1) \
-                    ? parent->get_adjacent(this, dir) : (*(child+1)).get()
-                    case direction_t::LEFT: return PREV_NODE;
-                    case direction_t::RIGHT: return NEXT_NODE;
-                    case direction_t::UP:
-                    case direction_t::DOWN:
-                        return parent->get_adjacent(this, dir);
-                }
-            }
-        case split_type_t::HSPLIT: 
-        case split_type_t::STACKED: 
-            {
-                switch (dir) {
-                    case direction_t::LEFT:
-                    case direction_t::RIGHT:
-                        return parent->get_adjacent(this, dir);
-                    case direction_t::UP: return PREV_NODE;
-                    case direction_t::DOWN: return NEXT_NODE;
+    case split_type_t::VSPLIT:
+    case split_type_t::TABBED: {
+        switch (dir) {
+#define PREV_NODE                                                              \
+    child == children.begin() ? parent->get_adjacent(this, dir)                \
+                              : (*(child - 1)).get()
+#define NEXT_NODE                                                              \
+    child == (children.end() - 1) ? parent->get_adjacent(this, dir)            \
+                                  : (*(child + 1)).get()
+        case direction_t::LEFT:
+            return PREV_NODE;
+        case direction_t::RIGHT:
+            return NEXT_NODE;
+        case direction_t::UP:
+        case direction_t::DOWN:
+            return parent->get_adjacent(this, dir);
+        }
+    }
+    case split_type_t::HSPLIT:
+    case split_type_t::STACKED: {
+        switch (dir) {
+        case direction_t::LEFT:
+        case direction_t::RIGHT:
+            return parent->get_adjacent(this, dir);
+        case direction_t::UP:
+            return PREV_NODE;
+        case direction_t::DOWN:
+            return NEXT_NODE;
 #undef NEXT_NODE
 #undef PREV_NODE
-                }
-                break;
-            }
+        }
+        break;
+    }
     }
 }
 
@@ -292,17 +294,19 @@ split_node_ref_t split_node_t::find_parent_split(bool horiz) {
     bool vertical = false;
     while (p) {
         switch (p->split_type) {
-            case split_type_t::VSPLIT: 
-            case split_type_t::TABBED:
-                horizontal = true;
-                break;
-            case split_type_t::HSPLIT: 
-            case split_type_t::STACKED: 
-                vertical = true;
-                break;
+        case split_type_t::VSPLIT:
+        case split_type_t::TABBED:
+            horizontal = true;
+            break;
+        case split_type_t::HSPLIT:
+        case split_type_t::STACKED:
+            vertical = true;
+            break;
         }
-        if (horiz && horizontal) break;
-        if (!horiz && vertical) break;
+        if (horiz && horizontal)
+            break;
+        if (!horiz && vertical)
+            break;
         p = p->parent->as_split_node();
     }
     if ((horizontal && horiz) || (vertical && !horiz))
@@ -315,43 +319,43 @@ bool split_node_t::move_child_outside(node_iter_t child, direction_t dir) {
     if (auto adj = parent->get_adjacent(this, dir)) {
         if (auto adj_split = adj->parent->as_split_node()) {
             switch (dir) {
-                case direction_t::LEFT:
-                case direction_t::UP:
-                    adj_split->insert_child_back_of(adj, remove_child(*child));
-                    break;
-                case direction_t::RIGHT:
-                case direction_t::DOWN:
-                    adj_split->insert_child_front_of(adj, remove_child(*child));
-                    break;
+            case direction_t::LEFT:
+            case direction_t::UP:
+                adj_split->insert_child_back_of(adj, remove_child(*child));
+                break;
+            case direction_t::RIGHT:
+            case direction_t::DOWN:
+                adj_split->insert_child_front_of(adj, remove_child(*child));
+                break;
             }
             return true;
         }
     } else {
         switch (dir) {
-            case direction_t::LEFT:
-                if (auto p = find_parent_split(true)) {
-                    p->insert_child_front(remove_child(*child));
-                    return true;
-                }
-                break;
-            case direction_t::RIGHT:
-                if (auto p = find_parent_split(true)) {
-                    p->insert_child_back(remove_child(*child));
-                    return true;
-                }
-                break;
-            case direction_t::UP:
-                if (auto p = find_parent_split(false)) {
-                    p->insert_child_front(remove_child(*child));
-                    return true;
-                }
-                break;
-            case direction_t::DOWN:
-                if (auto p = find_parent_split(false)) {
-                    p->insert_child_back(remove_child(*child));
-                    return true;
-                }
-                break;
+        case direction_t::LEFT:
+            if (auto p = find_parent_split(true)) {
+                p->insert_child_front(remove_child(*child));
+                return true;
+            }
+            break;
+        case direction_t::RIGHT:
+            if (auto p = find_parent_split(true)) {
+                p->insert_child_back(remove_child(*child));
+                return true;
+            }
+            break;
+        case direction_t::UP:
+            if (auto p = find_parent_split(false)) {
+                p->insert_child_front(remove_child(*child));
+                return true;
+            }
+            break;
+        case direction_t::DOWN:
+            if (auto p = find_parent_split(false)) {
+                p->insert_child_back(remove_child(*child));
+                return true;
+            }
+            break;
         }
     }
     return false;
@@ -362,83 +366,79 @@ bool split_node_t::move_child(node_t node, direction_t dir) {
     if (child == children.end())
         LOGE("Node ", node, " not found in split node: ", this);
 
-#define MOVE_BACK()                                                          \
-    {                                                                        \
-        if (child == children.begin()) {                                     \
-            return move_child_outside(child, dir);                           \
-        } else {                                                             \
-            if (auto adj_split = (*(child-1))->as_split_node()) {            \
-                adj_split->insert_child_back(remove_child(*child));          \
-                return true;                                                 \
-            } else if (auto adj_view = (*(child-1))->as_view_node()) {      \
-                if (auto adj_split = adj_view->replace_with_split()) {       \
-                    adj_split->insert_child_back(remove_child(*child));      \
-                    return true;                                             \
-                }                                                            \
-            }                                                                \
-            insert_child_front_of((*(child-1)).get(), remove_child(*child)); \
-            return true;                                                     \
-        }                                                                    \
+#define MOVE_BACK()                                                            \
+    {                                                                          \
+        if (child == children.begin()) {                                       \
+            return move_child_outside(child, dir);                             \
+        } else {                                                               \
+            if (auto adj_split = (*(child - 1))->as_split_node()) {            \
+                adj_split->insert_child_back(remove_child(*child));            \
+                return true;                                                   \
+            } else if (auto adj_view = (*(child - 1))->as_view_node()) {       \
+                if (auto adj_split = adj_view->replace_with_split()) {         \
+                    adj_split->insert_child_back(remove_child(*child));        \
+                    return true;                                               \
+                }                                                              \
+            }                                                                  \
+            insert_child_front_of((*(child - 1)).get(), remove_child(*child)); \
+            return true;                                                       \
+        }                                                                      \
     }
 
-#define MOVE_FORWARD()                                                      \
-    {                                                                       \
-        if (child == children.end()-1) {                                    \
-            return move_child_outside(child, dir);                          \
-        } else {                                                            \
-            if (auto adj_split = (*(child+1))->as_split_node()) {           \
-                adj_split->insert_child_front(remove_child(*child));        \
-                return true;                                                \
-            } else if (auto adj_view = (*(child+1))->as_view_node()) {     \
-                if (auto adj_split = adj_view->replace_with_split()) {      \
-                    adj_split->insert_child_front(remove_child(*child));    \
-                    return true;                                            \
-                }                                                           \
-            }                                                               \
-            insert_child_back_of((*(child+1)).get(), remove_child(*child)); \
-            return true;                                                    \
-        }                                                                   \
+#define MOVE_FORWARD()                                                         \
+    {                                                                          \
+        if (child == children.end() - 1) {                                     \
+            return move_child_outside(child, dir);                             \
+        } else {                                                               \
+            if (auto adj_split = (*(child + 1))->as_split_node()) {            \
+                adj_split->insert_child_front(remove_child(*child));           \
+                return true;                                                   \
+            } else if (auto adj_view = (*(child + 1))->as_view_node()) {       \
+                if (auto adj_split = adj_view->replace_with_split()) {         \
+                    adj_split->insert_child_front(remove_child(*child));       \
+                    return true;                                               \
+                }                                                              \
+            }                                                                  \
+            insert_child_back_of((*(child + 1)).get(), remove_child(*child));  \
+            return true;                                                       \
+        }                                                                      \
     }
 
     switch (split_type) {
-        case split_type_t::VSPLIT: 
-        case split_type_t::TABBED:
-            {
-                switch (dir) {
-                    case direction_t::LEFT:
-                        MOVE_BACK();
-                        break;
-                    case direction_t::RIGHT:
-                        MOVE_FORWARD();
-                        break;
-                    case direction_t::UP:
-                    case direction_t::DOWN:
-                        return move_child_outside(child, dir);
-                }
-            }
-        case split_type_t::HSPLIT: 
-        case split_type_t::STACKED: 
-            {
-                switch (dir) {
-                    case direction_t::UP:
-                        MOVE_BACK();
-                        break;
-                    case direction_t::DOWN:
-                        MOVE_FORWARD();
-                        break;
-                    case direction_t::LEFT:
-                    case direction_t::RIGHT:
-                        return move_child_outside(child, dir);
-                }
-            }
+    case split_type_t::VSPLIT:
+    case split_type_t::TABBED: {
+        switch (dir) {
+        case direction_t::LEFT:
+            MOVE_BACK();
+            break;
+        case direction_t::RIGHT:
+            MOVE_FORWARD();
+            break;
+        case direction_t::UP:
+        case direction_t::DOWN:
+            return move_child_outside(child, dir);
+        }
+    }
+    case split_type_t::HSPLIT:
+    case split_type_t::STACKED: {
+        switch (dir) {
+        case direction_t::UP:
+            MOVE_BACK();
+            break;
+        case direction_t::DOWN:
+            MOVE_FORWARD();
+            break;
+        case direction_t::LEFT:
+        case direction_t::RIGHT:
+            return move_child_outside(child, dir);
+        }
+    }
     }
 #undef MOVE_FORWARD
 #undef MOVE_BACK
 }
 
-void split_node_t::set_floating(bool fl) {
-    floating = fl;
-}
+void split_node_t::set_floating(bool fl) { floating = fl; }
 
 void split_node_t::set_wsid(wf::point_t wsid) {
     this->wsid = wsid;
@@ -449,47 +449,45 @@ void split_node_t::set_wsid(wf::point_t wsid) {
 void split_node_t::set_geometry(wf::geometry_t geo) {
     switch (split_type) {
 // distribute over dim1 and pos1
-#define DISTRIBUTE(dim1, dim2, pos1, pos2)                \
-{                                                         \
-    auto total = 0;                                       \
-    unsigned int i = 0;                                   \
-    for (auto &child : children) {                        \
-        auto subgeo = child->get_geometry();              \
-                                                          \
-        subgeo.pos1 = geo.pos1 + total;                   \
-        subgeo.pos2 = geo.pos2;                           \
-                                                          \
-        if (i == children.size()-1) {                     \
-            subgeo.dim1 = geo.dim1 - total;               \
-        } else {                                          \
-            subgeo.dim1 = geo.dim1 * children_ratios[i];  \
-            total += subgeo.dim1;                         \
-        }                                                 \
-        subgeo.dim2 = geo.dim2;                           \
-                                                          \
-        child->set_geometry(subgeo);                      \
-        i++;                                              \
-    }                                                     \
-}
-        case split_type_t::VSPLIT: 
-            DISTRIBUTE(width, height, x, y);
-            break;
-        case split_type_t::HSPLIT: 
-            DISTRIBUTE(height, width, y, x);
-            break;
+#define DISTRIBUTE(dim1, dim2, pos1, pos2)                                     \
+    {                                                                          \
+        auto total = 0;                                                        \
+        unsigned int i = 0;                                                    \
+        for (auto &child : children) {                                         \
+            auto subgeo = child->get_geometry();                               \
+                                                                               \
+            subgeo.pos1 = geo.pos1 + total;                                    \
+            subgeo.pos2 = geo.pos2;                                            \
+                                                                               \
+            if (i == children.size() - 1) {                                    \
+                subgeo.dim1 = geo.dim1 - total;                                \
+            } else {                                                           \
+                subgeo.dim1 = geo.dim1 * children_ratios[i];                   \
+                total += subgeo.dim1;                                          \
+            }                                                                  \
+            subgeo.dim2 = geo.dim2;                                            \
+                                                                               \
+            child->set_geometry(subgeo);                                       \
+            i++;                                                               \
+        }                                                                      \
+    }
+    case split_type_t::VSPLIT:
+        DISTRIBUTE(width, height, x, y);
+        break;
+    case split_type_t::HSPLIT:
+        DISTRIBUTE(height, width, y, x);
+        break;
 #undef DISTRIBUTE
-        case split_type_t::TABBED:
-            {
-                for (auto &child : children)
-                    child->set_geometry(geo);
-                break;
-            }
-        case split_type_t::STACKED: 
-            {
-                for (auto &child : children)
-                    child->set_geometry(geo);
-                break;
-            }
+    case split_type_t::TABBED: {
+        for (auto &child : children)
+            child->set_geometry(geo);
+        break;
+    }
+    case split_type_t::STACKED: {
+        for (auto &child : children)
+            child->set_geometry(geo);
+        break;
+    }
     }
     geometry = geo;
 }
@@ -509,9 +507,7 @@ void workspace_t::set_active_node(node_t node) {
     active_node = node;
 }
 
-node_t workspace_t::get_active_node() {
-    return active_node;
-}
+node_t workspace_t::get_active_node() { return active_node; }
 
 node_parent_t workspace_t::get_active_parent_node() {
     return get_active_node()->get_active_parent_node();
@@ -525,9 +521,8 @@ void workspace_t::insert_floating_node(owned_node_t node) {
 }
 
 std::vector<owned_node_t>::iterator workspace_t::find_floating(node_t node) {
-    return std::find_if(floating_nodes.begin(), floating_nodes.end(), [&](auto &c){
-        return c.get() == node.get();
-    });
+    return std::find_if(floating_nodes.begin(), floating_nodes.end(),
+                        [&](auto &c) { return c.get() == node.get(); });
 }
 
 owned_node_t workspace_t::remove_floating_node(node_t node) {
@@ -545,8 +540,8 @@ owned_node_t workspace_t::remove_floating_node(node_t node) {
     if (floating_nodes.empty())
         active_floating = 0;
     else
-        active_floating = 
-            std::clamp(active_floating, (uint32_t)0, (uint32_t)(floating_nodes.size()-1));
+        active_floating = std::clamp(active_floating, (uint32_t)0,
+                                     (uint32_t)(floating_nodes.size() - 1));
 
     owned_node->set_floating(false);
 
@@ -578,9 +573,7 @@ node_t workspace_t::get_active_floating_node() {
     return floating_nodes.at(active_floating).get();
 }
 
-node_t workspace_t::get_active_tiled_node() {
-    return active_tiled_node;
-}
+node_t workspace_t::get_active_tiled_node() { return active_tiled_node; }
 
 owned_node_t workspace_t::swap_tiled_root(std::unique_ptr<split_node_t> other) {
     auto ret = std::move(tiled_root);
@@ -627,8 +620,8 @@ owned_node_t workspace_t::remove_tiled_node(node_t node) {
 }
 
 owned_node_t workspace_t::remove_node(node_t node) {
-    return node->get_floating() ? 
-        remove_floating_node(node) : remove_tiled_node(node);
+    return node->get_floating() ? remove_floating_node(node)
+                                : remove_tiled_node(node);
 }
 
 void workspace_t::insert_child(owned_node_t node) {
@@ -697,9 +690,7 @@ void workspace_t::toggle_tile_node(node_t node) {
     }
 }
 
-node_t workspace_t::get_last_active_node() {
-    return active_node;
-}
+node_t workspace_t::get_last_active_node() { return active_node; }
 
 node_t workspace_t::get_adjacent(node_t node, direction_t dir) {
     if (node.get() == tiled_root.get()) {
@@ -715,36 +706,41 @@ node_t workspace_t::get_adjacent(node_t node, direction_t dir) {
         auto &fl = floating_nodes;
         auto center = nonwf::geometry_center(node->get_geometry());
         switch (dir) {
-#define CLOSEST(axis, cmp)                                                                        \
-{                                                                                                 \
-    auto closest = std::min_element(fl.begin(), fl.end(),                                         \
-            [&](auto &a, auto &b){                                                                \
-                if (a.get() == node.get()) return false;                                          \
-                if (b.get() == node.get()) return true;                                           \
-                                                                                                  \
-                auto apoint = nonwf::geometry_center(a->get_geometry());                          \
-                auto bpoint = nonwf::geometry_center(b->get_geometry());                          \
-                                                                                                  \
-                if (center.axis cmp apoint.axis) return false;                                    \
-                if (center.axis cmp bpoint.axis) return true;                                     \
-                                                                                                  \
-                return std::abs(center.axis - apoint.axis) < std::abs(center.axis - bpoint.axis); \
-            });                                                                                   \
-    if (closest == fl.end()                                                                       \
-            || (*closest).get() == node.get()                                                     \
-            || center.axis cmp nonwf::geometry_center((*closest)->get_geometry()).axis)           \
-        return nullptr;                                                                           \
-    else                                                                                          \
-        return (*closest).get();                                                                  \
-}
-            case direction_t::LEFT:
-                CLOSEST(x, <);
-            case direction_t::RIGHT:
-                CLOSEST(x, >);
-            case direction_t::UP:
-                CLOSEST(y, <);
-            case direction_t::DOWN:
-                CLOSEST(y, >);
+#define CLOSEST(axis, cmp)                                                     \
+    {                                                                          \
+        auto closest =                                                         \
+            std::min_element(fl.begin(), fl.end(), [&](auto &a, auto &b) {     \
+                if (a.get() == node.get())                                     \
+                    return false;                                              \
+                if (b.get() == node.get())                                     \
+                    return true;                                               \
+                                                                               \
+                auto apoint = nonwf::geometry_center(a->get_geometry());       \
+                auto bpoint = nonwf::geometry_center(b->get_geometry());       \
+                                                                               \
+                if (center.axis cmp apoint.axis)                               \
+                    return false;                                              \
+                if (center.axis cmp bpoint.axis)                               \
+                    return true;                                               \
+                                                                               \
+                return std::abs(center.axis - apoint.axis) <                   \
+                       std::abs(center.axis - bpoint.axis);                    \
+            });                                                                \
+        if (closest == fl.end() || (*closest).get() == node.get() ||           \
+            center.axis cmp nonwf::geometry_center((*closest)->get_geometry()) \
+                .axis)                                                         \
+            return nullptr;                                                    \
+        else                                                                   \
+            return (*closest).get();                                           \
+    }
+        case direction_t::LEFT:
+            CLOSEST(x, <);
+        case direction_t::RIGHT:
+            CLOSEST(x, >);
+        case direction_t::UP:
+            CLOSEST(y, <);
+        case direction_t::DOWN:
+            CLOSEST(y, >);
 #undef CLOSEST
         }
     }
@@ -755,18 +751,18 @@ bool workspace_t::move_child(node_t node, direction_t dir) {
         auto geo = node->get_geometry();
 
         switch (dir) {
-            case direction_t::LEFT:
-                geo.x -= FLOATING_MOVE_STEP;
-                break;
-            case direction_t::RIGHT:
-                geo.x += FLOATING_MOVE_STEP;
-                break;
-            case direction_t::UP:
-                geo.y -= FLOATING_MOVE_STEP;
-                break;
-            case direction_t::DOWN:
-                geo.y += FLOATING_MOVE_STEP;
-                break;
+        case direction_t::LEFT:
+            geo.x -= FLOATING_MOVE_STEP;
+            break;
+        case direction_t::RIGHT:
+            geo.x += FLOATING_MOVE_STEP;
+            break;
+        case direction_t::UP:
+            geo.y -= FLOATING_MOVE_STEP;
+            break;
+        case direction_t::DOWN:
+            geo.y += FLOATING_MOVE_STEP;
+            break;
         }
 
         node->set_geometry(geo);
@@ -777,11 +773,8 @@ bool workspace_t::move_child(node_t node, direction_t dir) {
 
 // workspaces_t
 
-void workspaces_t::update_dims(
-        wf::dimensions_t ndims,
-        wf::geometry_t geo,
-        output_ref_t output
-        ) {
+void workspaces_t::update_dims(wf::dimensions_t ndims, wf::geometry_t geo,
+                               output_ref_t output) {
 
     workspaces.resize(ndims.width);
 
@@ -793,10 +786,10 @@ void workspaces_t::update_dims(
             col.reserve(ndims.height);
             for (int32_t y = col.size(); y < ndims.height; y++) {
                 col.push_back(std::unique_ptr<workspace_t>(
-                            new workspace_t({x, y}, geo, output)));
+                    new workspace_t({x, y}, geo, output)));
             }
         } else {
-            col.erase(col.begin()+ndims.height, col.end());
+            col.erase(col.begin() + ndims.height, col.end());
         }
         x++;
     }
@@ -855,11 +848,12 @@ void swayfire_t::unbind_signals() {
 
 void swayfire_t::init() {
     output->workspace->set_workspace_implementation(
-            std::make_unique<swayfire_workspace_implementation_t>(), true);
+        std::make_unique<swayfire_workspace_implementation_t>(), true);
 
     auto grid_dims = output->workspace->get_workspace_grid_size();
 
-    workspaces.update_dims(grid_dims, output->workspace->get_workarea(), output);
+    workspaces.update_dims(grid_dims, output->workspace->get_workarea(),
+                           output);
 
     auto views = output->workspace->get_views_in_layer(wf::ALL_LAYERS);
 

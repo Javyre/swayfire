@@ -1,5 +1,5 @@
-#include "swayfire.hpp"
 #include "grab.hpp"
+#include "swayfire.hpp"
 
 #include <bits/stdint-uintn.h>
 #include <memory>
@@ -10,8 +10,8 @@
 // active_grab_t
 
 std::unique_ptr<active_grab_t> active_grab_t::try_activate(
-        nonstd::observer_ptr<swayfire_t> plugin,
-        std::function<std::unique_ptr<active_grab_t>()> cons) {
+    nonstd::observer_ptr<swayfire_t> plugin,
+    std::function<std::unique_ptr<active_grab_t>()> cons) {
 
     if (plugin->output->activate_plugin(plugin->grab_interface)) {
         if (plugin->grab_interface->grab()) {
@@ -45,13 +45,13 @@ void active_move_t::pointer_motion(uint32_t x, uint32_t y) {
     dragged->set_geometry(geo);
 }
 
-std::unique_ptr<active_grab_t> active_move_t::construct(
-        nonstd::observer_ptr<swayfire_t> plugin,
-        node_t dragged) {
+std::unique_ptr<active_grab_t>
+active_move_t::construct(nonstd::observer_ptr<swayfire_t> plugin,
+                         node_t dragged) {
 
     return try_activate(plugin, [&]() {
         auto ret = std::make_unique<active_move_t>(
-                plugin, plugin->button_move_activate);
+            plugin, plugin->button_move_activate);
         auto p = wf::get_core().get_cursor_position();
 
         ret->dragged = dragged;
@@ -68,9 +68,9 @@ void active_resize_t::pointer_motion(uint32_t x, uint32_t y) {
     // TODO: impl drag resizing
 }
 
-std::unique_ptr<active_grab_t> active_resize_t::construct(
-        nonstd::observer_ptr<swayfire_t> plugin,
-        node_t dragged) {
+std::unique_ptr<active_grab_t>
+active_resize_t::construct(nonstd::observer_ptr<swayfire_t> plugin,
+                           node_t dragged) {
     // TODO: impl drag resizing
     return nullptr;
 }
@@ -82,7 +82,6 @@ void swayfire_t::init_grab_interface() {
     grab_interface->capabilities =
         wf::CAPABILITY_GRAB_INPUT | wf::CAPABILITY_MANAGE_DESKTOP;
 
-
     grab_interface->callbacks.pointer.motion = [&](uint32_t x, uint32_t y) {
         if (active_grab)
             active_grab->pointer_motion(x, y);
@@ -93,12 +92,13 @@ void swayfire_t::init_grab_interface() {
             active_grab->button(b, state);
     };
 
-    grab_interface->callbacks.touch.motion = [&](int32_t id, int32_t x, int32_t y) {
+    grab_interface->callbacks.touch.motion = [&](int32_t id, int32_t x,
+                                                 int32_t y) {
         if (active_grab && id == 1)
             active_grab->pointer_motion(x, y);
     };
 
-    on_move_activate = [&](auto){
+    on_move_activate = [&](auto) {
         if (auto view = wf::get_core().get_cursor_focus_view()) {
             if (auto vdata = view->get_data<view_data_t>()) {
                 if (auto node = vdata->node->find_floating_parent()) {
@@ -112,7 +112,7 @@ void swayfire_t::init_grab_interface() {
         return false;
     };
 
-    on_resize_activate = [&](auto){
+    on_resize_activate = [&](auto) {
         // TODO: impl this
         return false;
     };

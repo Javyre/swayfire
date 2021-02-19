@@ -21,8 +21,19 @@ add_project_arguments(['-DWLR_USE_UNSTABLE'], language: ['cpp', 'c'])
 add_project_arguments(['-DWAYFIRE_PLUGIN'], language: ['cpp', 'c'])
 add_project_link_arguments(['-rdynamic'], language:'cpp')
 
+all_src = []
+
 subdir('src')
 subdir('metadata')
+
+run_target('format',
+	command: ['clang-format', '-i', '--style=file', '--verbose', all_src])
+
+run_target('tidy',
+	command: ['clang-tidy', all_src])
+
+run_target('cppcheck',
+	command: ['cppcheck', '--enable=all', all_src])
 
 summary = [
 	'',
