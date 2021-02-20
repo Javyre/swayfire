@@ -11,7 +11,7 @@ class IActiveGrab {
 
     static std::unique_ptr<IActiveGrab>
     try_activate(nonstd::observer_ptr<Swayfire> plugin,
-                 std::function<std::unique_ptr<IActiveGrab>()> cons);
+                 const std::function<std::unique_ptr<IActiveGrab>()> &cons);
 
   public:
     IActiveGrab(IActiveGrab &) = delete;
@@ -43,6 +43,7 @@ class ActiveMove : public IActiveButtonDrag {
   private:
     Node dragged;
     wf::geometry_t original_geo;
+
     wf::point_t pointer_start;
 
   public:

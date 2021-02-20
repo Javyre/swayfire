@@ -44,8 +44,8 @@ wf::geometry_t nonwf::local_to_relative_geometry(wf::geometry_t geo,
 
 wf::point_t nonwf::geometry_center(wf::geometry_t geo) {
     return {
-        (int)std::floor((geo.x + geo.width) / 2.0f),
-        (int)std::floor((geo.y + geo.height) / 2.0f),
+        (int)std::floor((float)(geo.x + geo.width) / 2.0f),
+        (int)std::floor((float)(geo.y + geo.height) / 2.0f),
     };
 }
 
@@ -123,9 +123,9 @@ void SplitNode::insert_child_at(NodeIter at, OwnedNode node) {
     float shrink_ratio = (float)children.size() / (float)(children.size() + 1);
     float total_ratio = 0;
 
-    for (auto i = children_ratios.begin(); i != children_ratios.end(); i++) {
-        *i *= shrink_ratio;
-        total_ratio += *i;
+    for (auto &cr : children_ratios) {
+        cr *= shrink_ratio;
+        total_ratio += cr;
     }
     children_ratios.insert(children_ratios.begin() +
                                std::distance(children.begin(), at),
@@ -793,7 +793,7 @@ WorkspaceRef Workspaces::get(wf::point_t ws) {
     return workspaces.at(ws.x).at(ws.y).get();
 }
 
-void Workspaces::for_each(std::function<void(WorkspaceRef)> fun) {
+void Workspaces::for_each(const std::function<void(WorkspaceRef)> &fun) {
     for (auto &col : workspaces)
         for (auto &ws : col)
             fun(ws.get());

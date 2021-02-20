@@ -9,9 +9,9 @@
 
 // IActiveGrab
 
-std::unique_ptr<IActiveGrab>
-IActiveGrab::try_activate(nonstd::observer_ptr<Swayfire> plugin,
-                          std::function<std::unique_ptr<IActiveGrab>()> cons) {
+std::unique_ptr<IActiveGrab> IActiveGrab::try_activate(
+    nonstd::observer_ptr<Swayfire> plugin,
+    const std::function<std::unique_ptr<IActiveGrab>()> &cons) {
 
     if (plugin->output->activate_plugin(plugin->grab_interface)) {
         if (plugin->grab_interface->grab()) {
@@ -40,8 +40,8 @@ void IActiveButtonDrag::button(uint32_t b, uint32_t state) {
 
 void ActiveMove::pointer_motion(uint32_t x, uint32_t y) {
     auto geo = original_geo;
-    geo.x += x - pointer_start.x;
-    geo.y += y - pointer_start.y;
+    geo.x += (int)x - pointer_start.x;
+    geo.y += (int)y - pointer_start.y;
     dragged->set_geometry(geo);
 }
 

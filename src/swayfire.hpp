@@ -78,7 +78,7 @@ using ViewNodeRef = nonstd::observer_ptr<ViewNode>;
 
 class IDisplay {
   public:
-    virtual std::string to_string() const {
+    [[nodiscard]] virtual std::string to_string() const {
         std::ostringstream out;
         out << this;
         return out.str();
@@ -114,8 +114,6 @@ class INodeParent : public virtual IDisplay {
     virtual OwnedNode remove_child(Node node) = 0;
     virtual OwnedNode swap_child(Node node, OwnedNode other) = 0;
     virtual void set_active_child(Node node) = 0;
-
-    virtual ~INodeParent() = default;
 };
 
 using NodeParent = nonstd::observer_ptr<INodeParent>;
@@ -155,8 +153,6 @@ class INode : public virtual IDisplay {
     virtual NodeParent get_active_parent_node() = 0;
 
     Node find_floating_parent();
-
-    virtual ~INode() = default;
 };
 
 class ViewNode : public INode {
@@ -307,7 +303,7 @@ struct Workspaces {
 
     WorkspaceRef get(wf::point_t ws);
 
-    void for_each(std::function<void(WorkspaceRef)> fun);
+    void for_each(const std::function<void(WorkspaceRef)> &fun);
 };
 
 class SwayfireWorkspaceImpl : public wf::workspace_implementation_t {
