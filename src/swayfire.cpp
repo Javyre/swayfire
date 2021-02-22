@@ -8,6 +8,7 @@
 #include <wayfire/core.hpp>
 #include <wayfire/geometry.hpp>
 #include <wayfire/util/log.hpp>
+#include <wlr/util/edges.h>
 
 // nonwf
 
@@ -61,6 +62,35 @@ SplitNodeRef INode::as_split_node() { return dynamic_cast<SplitNode *>(this); }
 
 ViewNodeRef INode::as_view_node() { return dynamic_cast<ViewNode *>(this); }
 
+void INode::try_resize(wf::dimensions_t ndims, uint32_t locked_edges) {
+    if (get_floating()) {
+        auto ngeo = get_geometry();
+
+        auto hori_locked =
+            (locked_edges & WLR_EDGE_LEFT) && (locked_edges & WLR_EDGE_RIGHT);
+        auto vert_locked =
+            (locked_edges & WLR_EDGE_TOP) && (locked_edges & WLR_EDGE_BOTTOM);
+
+        if (!hori_locked) {
+            if (locked_edges & WLR_EDGE_RIGHT) {
+                int dw = ndims.width - ngeo.width;
+                ngeo.x -= dw;
+            }
+            ngeo.width = ndims.width;
+        }
+
+        if (!vert_locked) {
+            if (locked_edges & WLR_EDGE_BOTTOM) {
+                int dh = ndims.height - ngeo.height;
+                ngeo.y -= dh;
+            }
+            ngeo.height = ndims.height;
+        }
+
+        set_geometry(ngeo);
+    }
+}
+
 Node INode::find_floating_parent() {
     if (get_floating())
         return this;
@@ -89,6 +119,28 @@ wf::geometry_t ViewNode::get_geometry() {
 }
 
 void ViewNode::set_geometry(wf::geometry_t geo) {
+    uint32_t edges = WLR_EDGE_NONE;
+
+    // Reset the x and y coords when resizing left and top edges since wayfire
+    // updates those coords for us.
+    if (geo.width != geometry.width) {
+        if (geo.x + geo.width == geometry.x + geometry.width) {
+            edges |= WLR_EDGE_LEFT;
+            geo.x = geometry.x;
+        } else if (geo.x == geometry.x)
+            edges |= WLR_EDGE_RIGHT;
+    }
+
+    if (geo.height != geometry.height) {
+        if (geo.y + geo.height == geometry.y + geometry.height) {
+            edges |= WLR_EDGE_TOP;
+            geo.y = geometry.y;
+        } else if (geo.y == geometry.y)
+            edges |= WLR_EDGE_BOTTOM;
+    }
+
+    view->set_resizing(edges != WLR_EDGE_NONE, edges);
+
     geometry = geo;
     view->set_geometry(nonwf::local_to_relative_geometry(geo, wsid, output));
 }

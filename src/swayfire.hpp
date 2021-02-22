@@ -144,6 +144,8 @@ class INode : public virtual IDisplay {
     virtual void set_geometry(wf::geometry_t geo) = 0;
     void refresh_geometry() { set_geometry(get_geometry()); }
 
+    virtual void try_resize(wf::dimensions_t ndims, uint32_t locked_edges);
+
     bool get_floating() { return floating; };
     virtual void set_floating(bool fl) = 0;
 

@@ -43,7 +43,6 @@ class ActiveMove : public IActiveButtonDrag {
   private:
     Node dragged;
     wf::geometry_t original_geo;
-
     wf::point_t pointer_start;
 
   public:

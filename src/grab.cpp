@@ -1,11 +1,15 @@
 #include "grab.hpp"
 #include "swayfire.hpp"
 
+#include <bits/stdint-intn.h>
 #include <bits/stdint-uintn.h>
 #include <memory>
 #include <wayfire/config/types.hpp>
+#include <wayfire/geometry.hpp>
 #include <wayfire/nonstd/observer_ptr.h>
+#include <wayfire/nonstd/wlroots-full.hpp>
 #include <wayfire/plugin.hpp>
+#include <wlr/util/edges.h>
 
 // IActiveGrab
 
@@ -63,14 +67,84 @@ ActiveMove::construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged) {
 
 // ActiveResize
 
+#define RESIZE_MARGIN 0.35f
+#define ALL_EDGES                                                              \
+    (WLR_EDGE_LEFT | WLR_EDGE_RIGHT | WLR_EDGE_TOP | WLR_EDGE_BOTTOM)
+uint32_t resize_calc_locked_edges(wf::geometry_t geo, wf::point_t p) {
+    if (!(geo & p)) {
+        LOGE("Point not in geometry. Cannot calculate locked egdes.");
+        return WLR_EDGE_NONE;
+    }
+
+    auto locked = ALL_EDGES;
+
+    auto vert_margin = (int)((float)geo.height * RESIZE_MARGIN);
+    auto hori_margin = (int)((float)geo.width * RESIZE_MARGIN);
+
+    if ((p.x - geo.x) < hori_margin)
+        locked &= ~WLR_EDGE_LEFT;
+    else if ((geo.x + geo.width - p.x) < hori_margin)
+        locked &= ~WLR_EDGE_RIGHT;
+
+    if ((p.y - geo.y) < vert_margin)
+        locked &= ~WLR_EDGE_TOP;
+    else if ((geo.y + geo.height - p.y) < vert_margin)
+        locked &= ~WLR_EDGE_BOTTOM;
+
+    if (locked == ALL_EDGES) {
+        if ((p.x - geo.x) < (geo.width / 2))
+            locked &= ~WLR_EDGE_LEFT;
+        else
+            locked &= ~WLR_EDGE_RIGHT;
+
+        if ((p.y - geo.y) < (geo.height / 2))
+            locked &= ~WLR_EDGE_TOP;
+        else
+            locked &= ~WLR_EDGE_BOTTOM;
+    }
+
+    LOGD("Locked edges (ldur): ", locked & WLR_EDGE_LEFT,
+         locked & WLR_EDGE_BOTTOM, locked & WLR_EDGE_TOP,
+         locked & WLR_EDGE_RIGHT);
+
+    return locked;
+}
+#undef RESIZE_MARGIN
+
 void ActiveResize::pointer_motion(uint32_t x, uint32_t y) {
-    // TODO: impl drag resizing
+    int dw = (int)x - pointer_start.x;
+    int dh = (int)y - pointer_start.y;
+
+    if (dw == 0 && dh == 0)
+        return;
+
+    int nw = (locked_edges & WLR_EDGE_RIGHT) ? original_geo.width - dw
+                                             : original_geo.width + dw;
+    int nh = (locked_edges & WLR_EDGE_BOTTOM) ? original_geo.height - dh
+                                              : original_geo.height + dh;
+
+    dragged->try_resize({nw, nh}, locked_edges);
 }
 
 std::unique_ptr<IActiveGrab>
 ActiveResize::construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged) {
-    // TODO: impl drag resizing
-    return nullptr;
+    return try_activate(plugin, [&]() {
+        auto ret = std::make_unique<ActiveResize>(
+            plugin, plugin->button_resize_activate);
+        auto p = wf::get_core().get_cursor_position();
+
+        ret->dragged = dragged;
+        ret->original_geo = dragged->get_geometry();
+        ret->pointer_start = {(int)p.x, (int)p.y};
+
+        ret->locked_edges =
+            resize_calc_locked_edges(ret->original_geo, ret->pointer_start);
+
+        wf::get_core().set_cursor(wlr_xcursor_get_resize_name(
+            (wlr_edges)(ALL_EDGES & ~ret->locked_edges)));
+
+        return ret;
+    });
 }
 
 // Swayfire
@@ -111,7 +185,16 @@ void Swayfire::init_grab_interface() {
     };
 
     on_resize_activate = [&](auto) {
-        // TODO: impl this
+        if (auto view = wf::get_core().get_cursor_focus_view()) {
+            if (auto vdata = view->get_data<ViewData>()) {
+                if (auto node = vdata->node->find_floating_parent()) {
+                    if (auto active = ActiveResize::construct(this, node)) {
+                        active_grab = std::move(active);
+                        return true;
+                    }
+                }
+            }
+        }
         return false;
     };
 
