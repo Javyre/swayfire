@@ -2,25 +2,15 @@
 
 // Swayfire
 
-void Workspace::toggle_split_direction_node(Node node) {
-    if (auto parent = node->parent->as_split_node()) {
-        LOGD("Toggling split dir: ", parent);
-
-        parent->split_type = (parent->split_type == SplitType::HSPLIT)
-                                 ? SplitType::VSPLIT
-                                 : SplitType::HSPLIT;
-
-        parent->refresh_geometry();
-    }
-}
-
 bool Swayfire::on_toggle_split_direction(wf::keybinding_t) {
     auto wsid = output->workspace->get_current_workspace();
     auto ws = workspaces.get(wsid);
 
     if (ws->get_active_node() && ws->get_active_node()->parent) {
-        ws->toggle_split_direction_node(ws->get_active_node());
-        return true;
+        if (auto parent = ws->get_active_node()->parent->as_split_node()) {
+            parent->toggle_split_direction();
+            return true;
+        }
     }
     return false;
 }

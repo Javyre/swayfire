@@ -31,14 +31,14 @@ wf::point_t nonwf::get_view_workspace(wayfire_view view, OutputRef output) {
 }
 
 wf::geometry_t nonwf::local_to_relative_geometry(wf::geometry_t geo,
-                                                 wf::point_t wsid,
+                                                 wf::point_t from_wsid,
+                                                 wf::point_t to_wsid,
                                                  OutputRef output) {
 
     auto og = output->get_screen_size();
-    auto curr = output->workspace->get_current_workspace();
 
-    geo.x += og.width * (wsid.x - curr.x);
-    geo.y += og.height * (wsid.y - curr.y);
+    geo.x += og.width * (from_wsid.x - to_wsid.x);
+    geo.y += og.height * (from_wsid.y - to_wsid.y);
 
     return geo;
 }
@@ -142,10 +142,12 @@ void ViewNode::set_geometry(wf::geometry_t geo) {
     view->set_resizing(edges != WLR_EDGE_NONE, edges);
 
     geometry = geo;
-    view->set_geometry(nonwf::local_to_relative_geometry(geo, wsid, output));
+    auto curr_wsid = output->workspace->get_current_workspace();
+    view->set_geometry(
+        nonwf::local_to_relative_geometry(geo, wsid, curr_wsid, output));
 }
 
-SplitNodeRef ViewNode::replace_with_split() {
+SplitNodeRef ViewNode::try_upgrade() {
     if (prefered_split_type) {
         auto new_parent = std::make_unique<SplitNode>(get_geometry(), output);
         auto new_parent_ref = new_parent.get();
@@ -160,8 +162,8 @@ SplitNodeRef ViewNode::replace_with_split() {
     return nullptr;
 }
 
-NodeParent ViewNode::get_active_parent_node() {
-    if (auto split = replace_with_split())
+NodeParent ViewNode::get_or_upgrade_to_parent_node() {
+    if (auto split = try_upgrade())
         return split;
     else
         return parent;
@@ -265,7 +267,16 @@ void SplitNode::set_active_child(Node node) {
     parent->set_active_child(this);
 }
 
-NodeParent SplitNode::get_active_parent_node() { return this; }
+void SplitNode::toggle_split_direction() {
+    LOGD("Toggling split dir: ", parent);
+
+    split_type = (split_type == SplitType::HSPLIT) ? SplitType::VSPLIT
+                                                   : SplitType::HSPLIT;
+
+    refresh_geometry();
+}
+
+NodeParent SplitNode::get_or_upgrade_to_parent_node() { return this; }
 
 OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
     auto child = find_child(node);
@@ -285,11 +296,11 @@ Node SplitNode::get_last_active_node() {
         return nullptr;
 
     auto &child = children.at(active_child);
-    if (auto split = child->as_split_node()) {
-        return split->get_last_active_node();
-    } else {
-        return child.get();
-    }
+    if (auto split = child->as_split_node())
+        if (auto la = split->get_last_active_node())
+            return la;
+
+    return child.get();
 }
 
 Node SplitNode::get_adjacent(Node node, Direction dir) {
@@ -421,7 +432,7 @@ bool SplitNode::move_child(Node node, Direction dir) {
                 adj_split->insert_child_back(remove_child(*child));            \
                 return true;                                                   \
             } else if (auto adj_view = (*(child - 1))->as_view_node()) {       \
-                if (auto adj_split = adj_view->replace_with_split()) {         \
+                if (auto adj_split = adj_view->try_upgrade()) {                \
                     adj_split->insert_child_back(remove_child(*child));        \
                     return true;                                               \
                 }                                                              \
@@ -440,7 +451,7 @@ bool SplitNode::move_child(Node node, Direction dir) {
                 adj_split->insert_child_front(remove_child(*child));           \
                 return true;                                                   \
             } else if (auto adj_view = (*(child + 1))->as_view_node()) {       \
-                if (auto adj_split = adj_view->replace_with_split()) {         \
+                if (auto adj_split = adj_view->try_upgrade()) {                \
                     adj_split->insert_child_front(remove_child(*child));       \
                     return true;                                               \
                 }                                                              \
@@ -555,10 +566,6 @@ void Workspace::set_active_node(Node node) {
 
 Node Workspace::get_active_node() { return active_node; }
 
-NodeParent Workspace::get_active_parent_node() {
-    return get_active_node()->get_active_parent_node();
-}
-
 void Workspace::insert_floating_node(OwnedNode node) {
     node->set_floating(true);
     node->set_wsid(wsid);
@@ -635,7 +642,7 @@ OwnedNode Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
 void Workspace::insert_tiled_node(OwnedNode node) {
     node->set_floating(false);
     node->set_wsid(wsid);
-    auto parent = get_active_parent_node();
+    auto parent = get_active_node()->get_or_upgrade_to_parent_node();
 
     parent->insert_child(std::move(node));
 }
@@ -651,7 +658,7 @@ OwnedNode Workspace::remove_tiled_node(Node node) {
     if (auto parent = node->parent) {
         ret = parent->remove_child(node);
     } else if (node.get() == tiled_root.get()) {
-        ret = swap_tiled_root(std::make_unique<SplitNode>(geometry, output));
+        ret = swap_tiled_root(std::make_unique<SplitNode>(workarea, output));
     } else {
         LOGE("Node not tiled in ", this, ": ", node);
         return nullptr;
@@ -684,7 +691,7 @@ OwnedNode Workspace::remove_child(Node node) {
         // floating nodes are always direct children of the workspace
         ret = remove_floating_node(node);
     } else if (node.get() == tiled_root.get()) {
-        ret = swap_tiled_root(std::make_unique<SplitNode>(geometry, output));
+        ret = swap_tiled_root(std::make_unique<SplitNode>(workarea, output));
     } else {
         LOGE("Node is not a direct child of ", this, ": ", node);
         return nullptr;
@@ -722,7 +729,7 @@ void Workspace::set_active_child(Node node) {
 }
 
 void Workspace::set_workarea(wf::geometry_t geo) {
-    geometry = geo;
+    workarea = geo;
     tiled_root->set_geometry(geo);
 }
 
