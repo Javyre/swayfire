@@ -285,6 +285,20 @@ void SplitNode::toggle_split_direction() {
     refresh_geometry();
 }
 
+Node SplitNode::try_downgrade() {
+    if (children.size() == 1) {
+        auto only_child = remove_child(children.at(active_child));
+        auto only_child_ref = only_child.get();
+
+        if (auto vnode = only_child->as_view_node())
+            vnode->prefered_split_type = split_type;
+
+        parent->swap_child(this, std::move(only_child));
+        return only_child_ref;
+    }
+    return nullptr;
+}
+
 NodeParent SplitNode::get_or_upgrade_to_parent_node() { return this; }
 
 OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
@@ -323,10 +337,10 @@ Node SplitNode::get_adjacent(Node node, Direction dir) {
         switch (dir) {
 #define PREV_NODE                                                              \
     child == children.begin() ? parent->get_adjacent(this, dir)                \
-                              : (*(child - 1)).get()
+                              : child[-1].get()
 #define NEXT_NODE                                                              \
     child == (children.end() - 1) ? parent->get_adjacent(this, dir)            \
-                                  : (*(child + 1)).get()
+                                  : child[1].get()
         case Direction::LEFT:
             return PREV_NODE;
         case Direction::RIGHT:
@@ -437,16 +451,16 @@ bool SplitNode::move_child(Node node, Direction dir) {
         if (child == children.begin()) {                                       \
             return move_child_outside(child, dir);                             \
         } else {                                                               \
-            if (auto adj_split = (*(child - 1))->as_split_node()) {            \
+            if (auto adj_split = child[-1]->as_split_node()) {                 \
                 adj_split->insert_child_back(remove_child(*child));            \
                 return true;                                                   \
-            } else if (auto adj_view = (*(child - 1))->as_view_node()) {       \
+            } else if (auto adj_view = child[-1]->as_view_node()) {            \
                 if (auto adj_split = adj_view->try_upgrade()) {                \
                     adj_split->insert_child_back(remove_child(*child));        \
                     return true;                                               \
                 }                                                              \
             }                                                                  \
-            insert_child_front_of((*(child - 1)).get(), remove_child(*child)); \
+            insert_child_front_of(child[-1].get(), remove_child(*child));      \
             return true;                                                       \
         }                                                                      \
     }
@@ -456,16 +470,16 @@ bool SplitNode::move_child(Node node, Direction dir) {
         if (child == children.end() - 1) {                                     \
             return move_child_outside(child, dir);                             \
         } else {                                                               \
-            if (auto adj_split = (*(child + 1))->as_split_node()) {            \
+            if (auto adj_split = child[1]->as_split_node()) {                  \
                 adj_split->insert_child_front(remove_child(*child));           \
                 return true;                                                   \
-            } else if (auto adj_view = (*(child + 1))->as_view_node()) {       \
+            } else if (auto adj_view = child[1]->as_view_node()) {             \
                 if (auto adj_split = adj_view->try_upgrade()) {                \
                     adj_split->insert_child_front(remove_child(*child));       \
                     return true;                                               \
                 }                                                              \
             }                                                                  \
-            insert_child_back_of((*(child + 1)).get(), remove_child(*child));  \
+            insert_child_back_of(child[1].get(), remove_child(*child));        \
             return true;                                                       \
         }                                                                      \
     }

@@ -89,17 +89,8 @@ bool Swayfire::move_direction(Direction dir) {
         return false;
 
     if (old_parent.get() != ws->tiled_root.get()) {
-        if (auto parent_split = old_parent->as_split_node()) {
-            if (parent_split->children.size() == 1) {
-                auto only_child = parent_split->remove_child(
-                    parent_split->get_last_active_node());
-
-                if (auto vnode = only_child->as_view_node())
-                    vnode->prefered_split_type = parent_split->split_type;
-
-                parent_split->parent->swap_child(parent_split,
-                                                 std::move(only_child));
-            }
+        if (auto old_parent_split = old_parent->as_split_node()) {
+            old_parent_split->try_downgrade();
         }
     }
 

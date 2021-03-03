@@ -345,6 +345,14 @@ class SplitNode : public INode, public INodeParent {
     /// Toggle the split direction of this node.
     void toggle_split_direction();
 
+    /// Try to downgrade this node to its only child node.
+    ///
+    /// A split node is only downgradable if it contains exactly one direct
+    /// child. When downgraded, the node swaps itself in its parent for the only
+    /// child node. Finally, if the only child is a view node, the split
+    /// preference of it is set to the split type that this split was.
+    Node try_downgrade();
+
     // == INodeParent impl ==
 
     Node get_adjacent(Node node, Direction dir) override;
