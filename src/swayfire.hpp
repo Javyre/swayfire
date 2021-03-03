@@ -39,6 +39,9 @@ wf::geometry_t local_to_relative_geometry(wf::geometry_t geo,
 /// Get the center point of a geo.
 wf::point_t geometry_center(wf::geometry_t geo);
 
+#define NONWF_ALL_EDGES                                                        \
+    (WLR_EDGE_LEFT | WLR_EDGE_RIGHT | WLR_EDGE_TOP | WLR_EDGE_BOTTOM)
+
 } // namespace nonwf
 
 enum struct SplitType : uint8_t {
@@ -201,12 +204,25 @@ class INode : public virtual IDisplay {
     /// This is mainly to cause a recalculation of children geometries.
     void refresh_geometry() { set_geometry(get_geometry()); }
 
-    /// Resize outer geometry to ndims if possible with locked_edges.
+    /// Resize outer geometry to ndims if possible --by moving the given edges.
     ///
-    /// The locked edges remain in place while the others move to achieve the
-    /// requested dimensions. This may be a noop: if both right and left edges
-    /// are locked for example, the new width dimension will not be applied.
-    virtual void try_resize(wf::dimensions_t ndims, uint32_t locked_edges);
+    /// The other edges remain in place while the moving edges move to achieve
+    /// the requested dimensions. This may be a noop: if neither the right or
+    /// left edges are moving for example, the new width dimension will not be
+    /// applied.
+    virtual void try_resize(wf::dimensions_t ndims, uint32_t edges);
+
+    /// Begin a continuous resize with the given moving edges.
+    ///
+    /// If this is a parent node, the call is forwarded to the children with the
+    /// moving edges changed so that the only the edges that coincide with the
+    /// parent edges are locked.
+    virtual void begin_resize(uint32_t edges) = 0;
+
+    /// End a continuous resize.
+    ///
+    /// This call is forwarded to all children if this is a parent node.
+    virtual void end_resize() = 0;
 
     /// Get whether this node is floating.
     bool get_floating() { return floating; };
@@ -235,6 +251,9 @@ class ViewNode : public INode {
     /// The wayfire view corresponding to this node.
     wayfire_view view;
 
+    /// The moving edges during a continuous resize.
+    std::optional<uint32_t> resizing_edges;
+
     /// The prefered split type for upgrading this node to a split node.
     std::optional<SplitType> prefered_split_type;
 
@@ -252,6 +271,8 @@ class ViewNode : public INode {
 
     wf::geometry_t get_geometry() override;
     void set_geometry(wf::geometry_t geo) override;
+    void begin_resize(uint32_t edges) override;
+    void end_resize() override;
     void set_floating(bool fl) override;
     void set_wsid(wf::point_t wsid) override;
     NodeParent get_or_upgrade_to_parent_node() override;
@@ -332,6 +353,8 @@ class SplitNode : public INode, public INodeParent {
     // == INode impl ==
 
     void set_geometry(wf::geometry_t geo) override;
+    void begin_resize(uint32_t edges) override;
+    void end_resize() override;
     void set_floating(bool fl) override;
     void set_wsid(wf::point_t wsid) override;
     NodeParent get_or_upgrade_to_parent_node() override;

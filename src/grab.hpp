@@ -83,8 +83,8 @@ class ActiveResize : public IActiveButtonDrag {
     /// The initial position of the pointer.
     wf::point_t pointer_start;
 
-    /// The position-locked edges of the resizing node.
-    uint8_t locked_edges;
+    /// The moving edges of the resizing node.
+    uint8_t resizing_edges;
 
   public:
     ActiveResize(nonstd::observer_ptr<Swayfire> plugin,
@@ -96,6 +96,9 @@ class ActiveResize : public IActiveButtonDrag {
     /// Try to activate the grab_interface and begin an resize gesture.
     static std::unique_ptr<IActiveGrab>
     construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged);
+
+    /// Finish the continuous resize.
+    ~ActiveResize() override;
 };
 
 #endif // ifndef GRAB_HPP

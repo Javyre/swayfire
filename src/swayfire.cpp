@@ -62,17 +62,15 @@ SplitNodeRef INode::as_split_node() { return dynamic_cast<SplitNode *>(this); }
 
 ViewNodeRef INode::as_view_node() { return dynamic_cast<ViewNode *>(this); }
 
-void INode::try_resize(wf::dimensions_t ndims, uint32_t locked_edges) {
+void INode::try_resize(wf::dimensions_t ndims, uint32_t edges) {
     if (get_floating()) {
         auto ngeo = get_geometry();
 
-        auto hori_locked =
-            (locked_edges & WLR_EDGE_LEFT) && (locked_edges & WLR_EDGE_RIGHT);
-        auto vert_locked =
-            (locked_edges & WLR_EDGE_TOP) && (locked_edges & WLR_EDGE_BOTTOM);
+        auto hori_locked = (edges & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT)) == 0;
+        auto vert_locked = (edges & (WLR_EDGE_TOP | WLR_EDGE_BOTTOM)) == 0;
 
         if (!hori_locked) {
-            if (locked_edges & WLR_EDGE_RIGHT) {
+            if (edges & WLR_EDGE_LEFT) {
                 int dw = ndims.width - ngeo.width;
                 ngeo.x -= dw;
             }
@@ -80,7 +78,7 @@ void INode::try_resize(wf::dimensions_t ndims, uint32_t locked_edges) {
         }
 
         if (!vert_locked) {
-            if (locked_edges & WLR_EDGE_BOTTOM) {
+            if (edges & WLR_EDGE_TOP) {
                 int dh = ndims.height - ngeo.height;
                 ngeo.y -= dh;
             }
@@ -103,6 +101,20 @@ Node INode::find_floating_parent() {
 
 // ViewNode
 
+void ViewNode::begin_resize(uint32_t edges) {
+    resizing_edges = edges;
+
+    LOGD("Moving edges (ldur): ", edges & WLR_EDGE_LEFT,
+         edges & WLR_EDGE_BOTTOM, edges & WLR_EDGE_TOP, edges & WLR_EDGE_RIGHT);
+
+    view->set_resizing(true, *resizing_edges);
+}
+
+void ViewNode::end_resize() {
+    resizing_edges = {};
+    view->set_resizing(false, 0);
+}
+
 void ViewNode::set_floating(bool fl) {
     if (!floating && fl)
         view->request_native_size();
@@ -119,32 +131,29 @@ wf::geometry_t ViewNode::get_geometry() {
 }
 
 void ViewNode::set_geometry(wf::geometry_t geo) {
-    uint32_t edges = WLR_EDGE_NONE;
-
-    // Reset the x and y coords when resizing left and top edges since wayfire
-    // updates those coords for us.
-    if (geo.width != geometry.width) {
-        if (geo.x + geo.width == geometry.x + geometry.width) {
-            edges |= WLR_EDGE_LEFT;
+    if (resizing_edges) {
+        // Reset the x and y coords when resizing left and top edges since
+        // wayfire updates those coords for us during continuous resizes.
+        if ((*resizing_edges & WLR_EDGE_RIGHT) == 0 &&
+            geo.width != geometry.width &&
+            geo.x + geo.width == geometry.x + geometry.width) {
             geo.x = geometry.x;
-        } else if (geo.x == geometry.x)
-            edges |= WLR_EDGE_RIGHT;
-    }
+        }
 
-    if (geo.height != geometry.height) {
-        if (geo.y + geo.height == geometry.y + geometry.height) {
-            edges |= WLR_EDGE_TOP;
+        if ((*resizing_edges & WLR_EDGE_BOTTOM) == 0 &&
+            geo.height != geometry.height &&
+            geo.y + geo.height == geometry.y + geometry.height) {
             geo.y = geometry.y;
-        } else if (geo.y == geometry.y)
-            edges |= WLR_EDGE_BOTTOM;
+        }
     }
-
-    view->set_resizing(edges != WLR_EDGE_NONE, edges);
 
     geometry = geo;
     auto curr_wsid = output->workspace->get_current_workspace();
-    view->set_geometry(
-        nonwf::local_to_relative_geometry(geo, wsid, curr_wsid, output));
+    if (wsid != curr_wsid)
+        view->set_geometry(
+            nonwf::local_to_relative_geometry(geo, wsid, curr_wsid, output));
+    else
+        view->set_geometry(geo);
 }
 
 SplitNodeRef ViewNode::try_upgrade() {
@@ -493,6 +502,65 @@ bool SplitNode::move_child(Node node, Direction dir) {
     }
 #undef MOVE_FORWARD
 #undef MOVE_BACK
+}
+
+void SplitNode::begin_resize(uint32_t edges) {
+    if (children.size() == 1)
+        children[0]->begin_resize(edges);
+
+    switch (split_type) {
+    case SplitType::VSPLIT: {
+        auto beg = children.begin();
+        auto end = children.end();
+        if ((edges & WLR_EDGE_LEFT) == 0) {
+            children.front()->begin_resize(edges);
+
+            edges |= WLR_EDGE_LEFT;
+            beg++;
+        }
+
+        if ((edges & WLR_EDGE_RIGHT) == 0) {
+            children.back()->begin_resize(edges);
+
+            edges |= WLR_EDGE_RIGHT;
+            end--;
+        }
+
+        std::for_each(beg, end, [=](auto &c) { c->begin_resize(edges); });
+        break;
+    }
+    case SplitType::HSPLIT: {
+        auto beg = children.begin();
+        auto end = children.end();
+        if ((edges & WLR_EDGE_TOP) == 0) {
+            children.front()->begin_resize(edges);
+
+            edges |= WLR_EDGE_TOP;
+            beg++;
+        }
+
+        if ((edges & WLR_EDGE_BOTTOM) == 0) {
+            children.back()->begin_resize(edges);
+
+            edges |= WLR_EDGE_BOTTOM;
+            end--;
+        }
+
+        std::for_each(beg, end, [=](auto &c) { c->begin_resize(edges); });
+        break;
+    }
+    case SplitType::TABBED:
+    case SplitType::STACKED: {
+        for (auto &child : children)
+            child->begin_resize(edges);
+        break;
+    }
+    }
+}
+
+void SplitNode::end_resize() {
+    for (auto &child : children)
+        child->end_resize();
 }
 
 void SplitNode::set_floating(bool fl) { floating = fl; }
