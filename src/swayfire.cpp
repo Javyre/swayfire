@@ -932,7 +932,7 @@ std::unique_ptr<ViewNode> Swayfire::init_view_node(wayfire_view view) {
     auto node = std::make_unique<ViewNode>(view, output);
     view->store_data<ViewData>(std::make_unique<ViewData>(node));
 
-    LOGD("New view-node for ", view->to_string(), ": ", node->to_string());
+    LOGD("New view-node for ", view->to_string(), ": ", node.get());
     return node;
 }
 

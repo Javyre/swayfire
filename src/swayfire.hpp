@@ -101,6 +101,13 @@ inline std::ostream &operator<<(std::ostream &os, const IDisplay &n) {
     return n.to_stream(os);
 }
 
+inline std::ostream &operator<<(std::ostream &os, const IDisplay *n) {
+    if (n)
+        return n->to_stream(os);
+    os << "(null)";
+    return os;
+}
+
 template <class T>
 inline std::ostream &operator<<(std::ostream &os,
                                 const nonstd::observer_ptr<T> &n) {
