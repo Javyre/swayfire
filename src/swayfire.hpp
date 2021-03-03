@@ -89,7 +89,7 @@ class IDisplay {
   public:
     [[nodiscard]] virtual std::string to_string() const {
         std::ostringstream out;
-        out << this;
+        to_stream(out);
         return out.str();
     };
     virtual std::ostream &to_stream(std::ostream &os) const = 0;
