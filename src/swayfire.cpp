@@ -99,25 +99,76 @@ Node INode::find_floating_parent() {
     return nullptr;
 }
 
-// ViewNode
+// ViewGeoEnforcer
 
-void ViewNode::begin_resize(uint32_t edges) {
-    resizing_edges = edges;
-
-    LOGD("Moving edges (ldur): ", edges & WLR_EDGE_LEFT,
-         edges & WLR_EDGE_BOTTOM, edges & WLR_EDGE_TOP, edges & WLR_EDGE_RIGHT);
-
-    view->set_resizing(true, *resizing_edges);
+ViewGeoEnforcer::ViewGeoEnforcer(ViewNodeRef node)
+    : wf::view_2D(node->view), view_node(node) {
+    view->connect_signal("geometry-changed", &on_geometry_changed);
 }
 
-void ViewNode::end_resize() {
-    resizing_edges = {};
-    view->set_resizing(false, 0);
+ViewGeoEnforcer::~ViewGeoEnforcer() {
+    view->disconnect_signal(&on_geometry_changed);
+}
+
+void ViewGeoEnforcer::update_transformer() {
+    auto curr = view->get_wm_geometry();
+
+    if (curr.width <= 0 && curr.height <= 0)
+        return;
+
+    auto geo = view_node->get_geometry();
+
+    auto output = view_node->output;
+    auto wsid = view_node->get_wsid();
+    auto curr_wsid = output->workspace->get_current_workspace();
+    if (wsid != curr_wsid)
+        geo = nonwf::local_to_relative_geometry(geo, wsid, curr_wsid, output);
+
+    if (curr == geo) {
+        scale_x = 1;
+        scale_y = 1;
+        translation_x = 0;
+        translation_y = 0;
+        view->damage();
+        return;
+    }
+
+    scale_x = (float)geo.width / (float)curr.width;
+    scale_y = (float)geo.height / (float)curr.height;
+
+    translation_x = (float)geo.x - (float)curr.x +
+                    ((float)geo.width - (float)curr.width) / 2.0f;
+    translation_y = (float)geo.y - (float)curr.y +
+                    ((float)geo.height - (float)curr.height) / 2.0f;
+
+    view->damage();
+}
+
+// ViewNode
+
+ViewNode::ViewNode(wayfire_view view, OutputRef output)
+    : INode(output), view(view) {
+    auto ge = std::make_unique<ViewGeoEnforcer>(this);
+    geo_enforcer = ge.get();
+    view->add_transformer(std::move(ge));
+
+    geometry = view->get_wm_geometry();
+    floating_geometry = geometry;
+
+    view->connect_signal("mapped", &on_mapped);
+}
+
+ViewNode::~ViewNode() {
+    view->disconnect_signal(&on_mapped);
+    view->pop_transformer(geo_enforcer);
 }
 
 void ViewNode::set_floating(bool fl) {
     if (!floating && fl)
-        view->request_native_size();
+        set_geometry(floating_geometry);
+
+    if (floating && !fl)
+        floating_geometry = get_geometry();
 
     floating = fl;
     view->set_tiled(fl ? 0 : wf::TILED_EDGES_ALL);
@@ -125,35 +176,15 @@ void ViewNode::set_floating(bool fl) {
 
 void ViewNode::set_wsid(wf::point_t wsid) { this->wsid = wsid; }
 
-wf::geometry_t ViewNode::get_geometry() {
-    geometry = view->get_wm_geometry();
-    return geometry;
-}
-
 void ViewNode::set_geometry(wf::geometry_t geo) {
-    if (resizing_edges) {
-        // Reset the x and y coords when resizing left and top edges since
-        // wayfire updates those coords for us during continuous resizes.
-        if ((*resizing_edges & WLR_EDGE_RIGHT) == 0 &&
-            geo.width != geometry.width &&
-            geo.x + geo.width == geometry.x + geometry.width) {
-            geo.x = geometry.x;
-        }
-
-        if ((*resizing_edges & WLR_EDGE_BOTTOM) == 0 &&
-            geo.height != geometry.height &&
-            geo.y + geo.height == geometry.y + geometry.height) {
-            geo.y = geometry.y;
-        }
-    }
-
     geometry = geo;
+
     auto curr_wsid = output->workspace->get_current_workspace();
     if (wsid != curr_wsid)
-        view->set_geometry(
-            nonwf::local_to_relative_geometry(geo, wsid, curr_wsid, output));
-    else
-        view->set_geometry(geo);
+        geo = nonwf::local_to_relative_geometry(geo, wsid, curr_wsid, output);
+
+    view->set_geometry(geo);
+    geo_enforcer->update_transformer();
 }
 
 SplitNodeRef ViewNode::try_upgrade() {
@@ -516,65 +547,6 @@ bool SplitNode::move_child(Node node, Direction dir) {
     }
 #undef MOVE_FORWARD
 #undef MOVE_BACK
-}
-
-void SplitNode::begin_resize(uint32_t edges) {
-    if (children.size() == 1)
-        children[0]->begin_resize(edges);
-
-    switch (split_type) {
-    case SplitType::VSPLIT: {
-        auto beg = children.begin();
-        auto end = children.end();
-        if ((edges & WLR_EDGE_LEFT) == 0) {
-            children.front()->begin_resize(edges);
-
-            edges |= WLR_EDGE_LEFT;
-            beg++;
-        }
-
-        if ((edges & WLR_EDGE_RIGHT) == 0) {
-            children.back()->begin_resize(edges);
-
-            edges |= WLR_EDGE_RIGHT;
-            end--;
-        }
-
-        std::for_each(beg, end, [=](auto &c) { c->begin_resize(edges); });
-        break;
-    }
-    case SplitType::HSPLIT: {
-        auto beg = children.begin();
-        auto end = children.end();
-        if ((edges & WLR_EDGE_TOP) == 0) {
-            children.front()->begin_resize(edges);
-
-            edges |= WLR_EDGE_TOP;
-            beg++;
-        }
-
-        if ((edges & WLR_EDGE_BOTTOM) == 0) {
-            children.back()->begin_resize(edges);
-
-            edges |= WLR_EDGE_BOTTOM;
-            end--;
-        }
-
-        std::for_each(beg, end, [=](auto &c) { c->begin_resize(edges); });
-        break;
-    }
-    case SplitType::TABBED:
-    case SplitType::STACKED: {
-        for (auto &child : children)
-            child->begin_resize(edges);
-        break;
-    }
-    }
-}
-
-void SplitNode::end_resize() {
-    for (auto &child : children)
-        child->end_resize();
 }
 
 void SplitNode::set_floating(bool fl) { floating = fl; }
@@ -958,10 +930,10 @@ void Swayfire::fini_view(wayfire_view view) {
         LOGD("Fini for: ", node);
 
         auto owned_node = node->parent->remove_child(node);
-        auto vnode = static_cast<ViewNode *>(owned_node.release());
+        auto vnode = static_cast<ViewNode *>(owned_node.get());
         vnode->view->erase_data<ViewData>();
 
-        delete vnode;
+        // owned_node dies here.
     }
 }
 
@@ -982,6 +954,7 @@ void Swayfire::unbind_signals() {
 }
 
 void Swayfire::init() {
+    LOGD("==== init ====");
     output->workspace->set_workspace_implementation(
         std::make_unique<SwayfireWorkspaceImpl>(), true);
 

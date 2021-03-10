@@ -137,13 +137,9 @@ ActiveResize::construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged) {
         wf::get_core().set_cursor(
             wlr_xcursor_get_resize_name((wlr_edges)(ret->resizing_edges)));
 
-        ret->dragged->begin_resize(ret->resizing_edges);
-
         return ret;
     });
 }
-
-ActiveResize::~ActiveResize() { dragged->end_resize(); }
 
 // Swayfire
 

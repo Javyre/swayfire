@@ -19,6 +19,7 @@
 #include <wayfire/plugin.hpp>
 #include <wayfire/signal-definitions.hpp>
 #include <wayfire/util/log.hpp>
+#include <wayfire/view-transform.hpp>
 #include <wayfire/workspace-manager.hpp>
 
 #define FLOATING_MOVE_STEP 5
@@ -219,18 +220,6 @@ class INode : public virtual IDisplay {
     /// applied.
     virtual void try_resize(wf::dimensions_t ndims, uint32_t edges);
 
-    /// Begin a continuous resize with the given moving edges.
-    ///
-    /// If this is a parent node, the call is forwarded to the children with the
-    /// moving edges changed so that the only the edges that coincide with the
-    /// parent edges are locked.
-    virtual void begin_resize(uint32_t edges) = 0;
-
-    /// End a continuous resize.
-    ///
-    /// This call is forwarded to all children if this is a parent node.
-    virtual void end_resize() = 0;
-
     /// Get whether this node is floating.
     bool get_floating() { return floating; };
 
@@ -252,11 +241,48 @@ class INode : public virtual IDisplay {
     Node find_floating_parent();
 };
 
+/// Transformer to force views to their supposed geometries.
+///
+/// This is a temporary workaround for
+/// https://github.com/Javyre/swayfire/issues/1.
+///
+/// Currently waiting on https://github.com/WayfireWM/wayfire/issues/995 which
+/// is planned for wayfire 0.9.
+class ViewGeoEnforcer : public wf::view_2D {
+  private:
+    ViewNodeRef view_node;
+
+    /// Handle the view changing geometry.
+    wf::signal_connection_t on_geometry_changed = [&](wf::signal_data_t *) {
+        update_transformer();
+    };
+
+  public:
+    ViewGeoEnforcer(ViewNodeRef node);
+
+    ~ViewGeoEnforcer() override;
+
+    /// Update the scaling and offset to enforce the geometry.
+    void update_transformer();
+};
+
 /// A node corresponding to a wayfire view.
 class ViewNode : public INode {
+    friend ViewGeoEnforcer;
+
+  private:
+    /// Handle the view being mapped.
+    wf::signal_connection_t on_mapped = [&](wf::signal_data_t *) {
+        if (view->tiled_edges != wf::TILED_EDGES_ALL)
+            floating_geometry = view->get_wm_geometry();
+    };
+
   public:
     /// The wayfire view corresponding to this node.
     wayfire_view view;
+
+    /// The last floating geometry of this node.
+    wf::geometry_t floating_geometry;
 
     /// The moving edges during a continuous resize.
     std::optional<uint32_t> resizing_edges;
@@ -264,7 +290,12 @@ class ViewNode : public INode {
     /// The prefered split type for upgrading this node to a split node.
     std::optional<SplitType> prefered_split_type;
 
-    ViewNode(wayfire_view view, OutputRef output) : INode(output), view(view) {}
+    /// The geo enforcer transformer attached to the view.
+    nonstd::observer_ptr<ViewGeoEnforcer> geo_enforcer;
+
+    ViewNode(wayfire_view view, OutputRef output);
+
+    ~ViewNode() override;
 
     /// Try to upgrade this node to a split node.
     ///
@@ -276,10 +307,7 @@ class ViewNode : public INode {
 
     // == INode impl ==
 
-    wf::geometry_t get_geometry() override;
     void set_geometry(wf::geometry_t geo) override;
-    void begin_resize(uint32_t edges) override;
-    void end_resize() override;
     void set_floating(bool fl) override;
     void set_wsid(wf::point_t wsid) override;
     NodeParent get_or_upgrade_to_parent_node() override;
@@ -368,8 +396,6 @@ class SplitNode : public INode, public INodeParent {
     // == INode impl ==
 
     void set_geometry(wf::geometry_t geo) override;
-    void begin_resize(uint32_t edges) override;
-    void end_resize() override;
     void set_floating(bool fl) override;
     void set_wsid(wf::point_t wsid) override;
     NodeParent get_or_upgrade_to_parent_node() override;
@@ -640,7 +666,7 @@ class Swayfire : public wf::plugin_interface_t {
         ws->insert_tiled_node(init_view_node(view));
     };
 
-    /// Handle destroyed views.
+    /// Handle unmapped views.
     wf::signal_connection_t on_view_unmapped = [&](wf::signal_data_t *data) {
         fini_view(wf::get_signaled_view(data));
     };
