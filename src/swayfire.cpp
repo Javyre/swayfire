@@ -89,6 +89,11 @@ void INode::try_resize(wf::dimensions_t ndims, uint32_t edges) {
     }
 }
 
+void INode::set_active() {
+    parent->set_active_child(this);
+    ws->set_active_node(this);
+}
+
 Node INode::find_floating_parent() {
     if (get_floating())
         return this;
@@ -118,8 +123,8 @@ void ViewGeoEnforcer::update_transformer() {
 
     auto geo = view_node->get_geometry();
 
-    auto output = view_node->output;
-    auto wsid = view_node->get_wsid();
+    auto output = view_node->ws->output;
+    auto wsid = view_node->ws->wsid;
     auto curr_wsid = output->workspace->get_current_workspace();
     if (wsid != curr_wsid)
         geo = nonwf::local_to_relative_geometry(geo, wsid, curr_wsid, output);
@@ -146,8 +151,7 @@ void ViewGeoEnforcer::update_transformer() {
 
 // ViewNode
 
-ViewNode::ViewNode(wayfire_view view, OutputRef output)
-    : INode(output), view(view) {
+ViewNode::ViewNode(wayfire_view view) : view(view) {
     auto ge = std::make_unique<ViewGeoEnforcer>(this);
     geo_enforcer = ge.get();
     view->add_transformer(std::move(ge));
@@ -156,11 +160,20 @@ ViewNode::ViewNode(wayfire_view view, OutputRef output)
     floating_geometry = geometry;
 
     view->connect_signal("mapped", &on_mapped);
+    view->connect_signal("unmapped", &on_unmapped);
+    view->get_output()->connect_signal("view-focused", &on_focused);
 }
 
 ViewNode::~ViewNode() {
+    LOGD("Destroying ", this);
+
+    view->get_output()->disconnect_signal(&on_focused);
+    view->disconnect_signal(&on_unmapped);
     view->disconnect_signal(&on_mapped);
+
     view->pop_transformer(geo_enforcer);
+
+    view->erase_data<ViewData>();
 }
 
 void ViewNode::set_floating(bool fl) {
@@ -174,14 +187,13 @@ void ViewNode::set_floating(bool fl) {
     view->set_tiled(fl ? 0 : wf::TILED_EDGES_ALL);
 }
 
-void ViewNode::set_wsid(wf::point_t wsid) { this->wsid = wsid; }
-
 void ViewNode::set_geometry(wf::geometry_t geo) {
     geometry = geo;
 
-    auto curr_wsid = output->workspace->get_current_workspace();
-    if (wsid != curr_wsid)
-        geo = nonwf::local_to_relative_geometry(geo, wsid, curr_wsid, output);
+    auto curr_wsid = ws->output->workspace->get_current_workspace();
+    if (ws->wsid != curr_wsid)
+        geo = nonwf::local_to_relative_geometry(geo, ws->wsid, curr_wsid,
+                                                ws->output);
 
     view->set_geometry(geo);
     geo_enforcer->update_transformer();
@@ -189,7 +201,7 @@ void ViewNode::set_geometry(wf::geometry_t geo) {
 
 SplitNodeRef ViewNode::try_upgrade() {
     if (prefered_split_type) {
-        auto new_parent = std::make_unique<SplitNode>(get_geometry(), output);
+        auto new_parent = std::make_unique<SplitNode>(get_geometry());
         auto new_parent_ref = new_parent.get();
         new_parent->split_type = *prefered_split_type;
         auto owned_self = parent->swap_child(this, std::move(new_parent));
@@ -200,6 +212,13 @@ SplitNodeRef ViewNode::try_upgrade() {
         return new_parent_ref;
     }
     return nullptr;
+}
+
+void ViewNode::set_active() {
+    INode::set_active();
+
+    if (!view->activated)
+        view->focus_request();
 }
 
 NodeParent ViewNode::get_or_upgrade_to_parent_node() {
@@ -551,10 +570,11 @@ bool SplitNode::move_child(Node node, Direction dir) {
 
 void SplitNode::set_floating(bool fl) { floating = fl; }
 
-void SplitNode::set_wsid(wf::point_t wsid) {
-    this->wsid = wsid;
+void SplitNode::set_ws(WorkspaceRef ws) {
+    INode::set_ws(ws);
+
     for (auto &child : children)
-        child->set_wsid(wsid);
+        child->set_ws(ws);
 }
 
 void SplitNode::set_geometry(wf::geometry_t geo) {
@@ -605,13 +625,18 @@ void SplitNode::set_geometry(wf::geometry_t geo) {
 
 // Workspace
 
+Workspace::Workspace(wf::point_t wsid, wf::geometry_t geo, OutputRef output)
+    : workarea(geo), wsid(wsid), output(output) {
+    (void)swap_tiled_root(std::make_unique<SplitNode>(geo));
+    LOGD("ws created with root ", tiled_root->to_string());
+    active_node = tiled_root;
+
+    output->connect_signal("workarea-changed", &on_workarea_changed);
+}
+
+Workspace::~Workspace() { output->disconnect_signal(&on_workarea_changed); }
+
 void Workspace::set_active_node(Node node) {
-    if (auto vnode = node->as_view_node())
-        if (!vnode->view->activated)
-            vnode->view->focus_request();
-
-    node->parent->set_active_child(node);
-
     if (!node->get_floating())
         active_tiled_node = node;
 
@@ -622,7 +647,7 @@ Node Workspace::get_active_node() { return active_node; }
 
 void Workspace::insert_floating_node(OwnedNode node) {
     node->set_floating(true);
-    node->set_wsid(wsid);
+    node->set_ws(this);
     node->parent = this;
     floating_nodes.push_back(std::move(node));
 }
@@ -664,7 +689,7 @@ OwnedNode Workspace::swap_floating_node(Node node, OwnedNode other) {
     }
 
     other->set_floating(true);
-    other->set_wsid(wsid);
+    other->set_ws(this);
     other->parent = this;
     other->set_geometry((*child)->get_geometry());
 
@@ -687,7 +712,7 @@ OwnedNode Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
 
     tiled_root = std::move(other);
     tiled_root->set_floating(false);
-    tiled_root->set_wsid(wsid);
+    tiled_root->set_ws(this);
     tiled_root->parent = this;
 
     return ret;
@@ -695,14 +720,14 @@ OwnedNode Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
 
 void Workspace::insert_tiled_node(OwnedNode node) {
     node->set_floating(false);
-    node->set_wsid(wsid);
+    node->set_ws(this);
     auto parent = get_active_node()->get_or_upgrade_to_parent_node();
 
     parent->insert_child(std::move(node));
 }
 
 OwnedNode Workspace::remove_tiled_node(Node node) {
-    if (node->get_floating() || node->get_wsid() != wsid) {
+    if (node->get_floating() || node->get_ws()->wsid != wsid) {
         LOGE("Node not tiled in ", this, ": ", node);
         return nullptr;
     }
@@ -712,7 +737,7 @@ OwnedNode Workspace::remove_tiled_node(Node node) {
     if (auto parent = node->parent) {
         ret = parent->remove_child(node);
     } else if (node.get() == tiled_root.get()) {
-        ret = swap_tiled_root(std::make_unique<SplitNode>(workarea, output));
+        ret = swap_tiled_root(std::make_unique<SplitNode>(workarea));
     } else {
         LOGE("Node not tiled in ", this, ": ", node);
         return nullptr;
@@ -733,7 +758,7 @@ OwnedNode Workspace::remove_node(Node node) {
 
 void Workspace::insert_child(OwnedNode node) {
     node->set_floating(false);
-    node->set_wsid(wsid);
+    node->set_ws(this);
 
     tiled_root->insert_child(std::move(node));
 }
@@ -745,14 +770,14 @@ OwnedNode Workspace::remove_child(Node node) {
         // floating nodes are always direct children of the workspace
         ret = remove_floating_node(node);
     } else if (node.get() == tiled_root.get()) {
-        ret = swap_tiled_root(std::make_unique<SplitNode>(workarea, output));
+        ret = swap_tiled_root(std::make_unique<SplitNode>(workarea));
     } else {
         LOGE("Node is not a direct child of ", this, ": ", node);
         return nullptr;
     }
 
     if (node.get() == get_active_node().get())
-        set_active_node(tiled_root);
+        tiled_root->set_active();
 
     return ret;
 }
@@ -914,43 +939,25 @@ void Workspaces::for_each(const std::function<void(WorkspaceRef)> &fun) {
 
 // Swayfire
 
+WorkspaceRef Swayfire::get_current_workspace() {
+    auto wsid = output->workspace->get_current_workspace();
+    return workspaces.get(wsid);
+}
+
 std::unique_ptr<ViewNode> Swayfire::init_view_node(wayfire_view view) {
-    auto node = std::make_unique<ViewNode>(view, output);
+    auto node = std::make_unique<ViewNode>(view);
     view->store_data<ViewData>(std::make_unique<ViewData>(node));
 
     LOGD("New view-node for ", view->to_string(), ": ", node.get());
     return node;
 }
 
-void Swayfire::fini_view(wayfire_view view) {
-    if (view->has_data<ViewData>()) {
-        auto vdata = view->get_data<ViewData>();
-        auto node = vdata->node;
-
-        LOGD("Fini for: ", node);
-
-        auto owned_node = node->parent->remove_child(node);
-        auto vnode = static_cast<ViewNode *>(owned_node.get());
-        vnode->view->erase_data<ViewData>();
-
-        // owned_node dies here.
-    }
-}
-
 void Swayfire::bind_signals() {
-    wf::get_core().connect_signal("shutdown", &on_shutdown);
     output->connect_signal("view-layer-attached", &on_view_attached);
-    output->connect_signal("view-unmapped", &on_view_unmapped);
-    output->connect_signal("view-focused", &on_view_focused);
-    output->connect_signal("workarea-changed", &on_workarea_changed);
 }
 
 void Swayfire::unbind_signals() {
-    output->disconnect_signal(&on_workarea_changed);
-    output->disconnect_signal(&on_view_focused);
-    output->disconnect_signal(&on_view_unmapped);
     output->disconnect_signal(&on_view_attached);
-    wf::get_core().disconnect_signal(&on_shutdown);
 }
 
 void Swayfire::init() {
@@ -974,9 +981,7 @@ void Swayfire::init() {
 
     if (auto active_view = output->get_active_view()) {
         if (auto vdata = active_view->get_data<ViewData>()) {
-            auto node = vdata->node;
-
-            workspaces.get(node->get_wsid())->set_active_node(node);
+            vdata->node->set_active();
         }
     }
 
@@ -995,10 +1000,9 @@ void Swayfire::fini() {
     fini_grab_interface();
 
     if (!is_shutting_down()) {
-        auto views = output->workspace->get_views_in_layer(wf::ALL_LAYERS);
-
-        for (auto view : views)
-            fini_view(view);
+        // Destroy all workspaces, which will destroy all managed nodes and
+        // detach custom data from the managed views.
+        workspaces.workspaces.clear();
     }
 
     output->workspace->set_workspace_implementation(nullptr, true);

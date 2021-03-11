@@ -77,11 +77,13 @@ inline Direction opposite_dir(Direction dir) {
 class INode;
 class SplitNode;
 class ViewNode;
+class Workspace;
 
 using OwnedNode = std::unique_ptr<INode>;
 using Node = nonstd::observer_ptr<INode>;
 using SplitNodeRef = nonstd::observer_ptr<SplitNode>;
 using ViewNodeRef = nonstd::observer_ptr<ViewNode>;
+using WorkspaceRef = nonstd::observer_ptr<Workspace>;
 
 using NodeIter = std::vector<OwnedNode>::iterator;
 
@@ -175,19 +177,15 @@ class INode : public virtual IDisplay {
   protected:
     /// Whether this node is floating.
     ///
-    /// If this node is a parent only it is considered floating and not its
+    /// If this node is a parent only *it* is considered floating and not its
     /// children.
     bool floating = false;
 
-    wf::point_t wsid = {0, 0}; ///< The workspace by which this node is managed.
-    wf::geometry_t geometry;   ///< The outer geometry of this node.
-    uint node_id;              ///< The id of this node.
+    WorkspaceRef ws;         ///< The workspace by which this node is managed.
+    wf::geometry_t geometry; ///< The outer geometry of this node.
+    uint node_id;            ///< The id of this node.
 
-    OutputRef output; ///< The wayfire output by which this node is managed.
-
-    INode(OutputRef output) : node_id(id_counter), output(output) {
-        id_counter++;
-    }
+    INode() : node_id(id_counter) { id_counter++; }
 
   public:
     NodeParent parent; ///< The parent of this node.
@@ -227,10 +225,13 @@ class INode : public virtual IDisplay {
     virtual void set_floating(bool fl) = 0;
 
     /// Get the workspace that manages this node.
-    wf::point_t get_wsid() { return wsid; };
+    WorkspaceRef get_ws() { return ws; };
 
     /// Set the workspace that manages this node.
-    virtual void set_wsid(wf::point_t wsid) = 0;
+    virtual void set_ws(WorkspaceRef ws) { this->ws = ws; };
+
+    /// Make this node the active selected node in its workspace.
+    virtual void set_active();
 
     /// Return self if this node is a parent or try to upgrade this node to
     /// become a parent or return the parent of this node.
@@ -266,6 +267,8 @@ class ViewGeoEnforcer : public wf::view_2D {
     void update_transformer();
 };
 
+struct ViewData;
+
 /// A node corresponding to a wayfire view.
 class ViewNode : public INode {
     friend ViewGeoEnforcer;
@@ -275,6 +278,21 @@ class ViewNode : public INode {
     wf::signal_connection_t on_mapped = [&](wf::signal_data_t *) {
         if (view->tiled_edges != wf::TILED_EDGES_ALL)
             floating_geometry = view->get_wm_geometry();
+    };
+
+    /// Handle the view being focused.
+    wf::signal_connection_t on_focused = [&](wf::signal_data_t *data) {
+        // The focused event is not directly available on views.
+        if (view.get() == wf::get_signaled_view(data).get())
+            set_active();
+    };
+
+    /// Handle unmapped views.
+    ///
+    /// Destroys the view node and the custom data attached to the view.
+    wf::signal_connection_t on_unmapped = [&](wf::signal_data_t *) {
+        parent->remove_child(this);
+        // view node dies here.
     };
 
   public:
@@ -293,7 +311,7 @@ class ViewNode : public INode {
     /// The geo enforcer transformer attached to the view.
     nonstd::observer_ptr<ViewGeoEnforcer> geo_enforcer;
 
-    ViewNode(wayfire_view view, OutputRef output);
+    ViewNode(wayfire_view view);
 
     ~ViewNode() override;
 
@@ -309,7 +327,7 @@ class ViewNode : public INode {
 
     void set_geometry(wf::geometry_t geo) override;
     void set_floating(bool fl) override;
-    void set_wsid(wf::point_t wsid) override;
+    void set_active() override;
     NodeParent get_or_upgrade_to_parent_node() override;
 
     // == IDisplay impl ==
@@ -351,9 +369,7 @@ class SplitNode : public INode, public INodeParent {
     std::vector<float> children_ratios;       ///< The Size ratios of children.
     std::vector<OwnedNode> children;          ///< The direct children nodes.
 
-    SplitNode(wf::geometry_t geo, OutputRef output) : INode(output) {
-        geometry = geo;
-    }
+    SplitNode(wf::geometry_t geo) { geometry = geo; }
 
     /// Insert a direct child at the given position in children.
     void insert_child_at(NodeIter at, OwnedNode node);
@@ -397,7 +413,7 @@ class SplitNode : public INode, public INodeParent {
 
     void set_geometry(wf::geometry_t geo) override;
     void set_floating(bool fl) override;
-    void set_wsid(wf::point_t wsid) override;
+    void set_ws(WorkspaceRef ws) override;
     NodeParent get_or_upgrade_to_parent_node() override;
 
     // == IDisplay impl ==
@@ -444,19 +460,23 @@ class Workspace : public INodeParent {
     /// Find a floating child of this ws.
     NodeIter find_floating(Node node);
 
-  public:
-    Workspace(wf::point_t wsid, wf::geometry_t geo, OutputRef output)
-        : workarea(geo), wsid(wsid), output(output) {
-        (void)swap_tiled_root(std::make_unique<SplitNode>(geo, output));
-        LOGD("ws created with root ", tiled_root->to_string());
-        active_node = tiled_root;
+    /// Handle workarea changes.
+    wf::signal_connection_t on_workarea_changed = [&](wf::signal_data_t *data) {
+        auto wcdata = static_cast<wf::workarea_changed_signal *>(data);
+        set_workarea(wcdata->new_workarea);
     };
 
-    Workspace(Workspace &) = delete;
-    Workspace(Workspace &&) = default;
-    Workspace &operator=(Workspace &&) = default;
+  public:
+    Workspace(wf::point_t wsid, wf::geometry_t geo, OutputRef output);
+
+    Workspace(const Workspace &) = delete;
+    Workspace const &operator=(const Workspace &) = delete;
+
+    ~Workspace() override;
 
     /// Set the currently active node in this ws.
+    ///
+    /// Prefer calling node->set_active().
     void set_active_node(Node node);
 
     /// Get the currently active node in this ws.
@@ -521,8 +541,6 @@ class Workspace : public INodeParent {
         return os;
     }
 };
-
-using WorkspaceRef = nonstd::observer_ptr<Workspace>;
 
 /// Grid of all the workspaces on an output.
 struct Workspaces {
@@ -595,9 +613,6 @@ class Swayfire : public wf::plugin_interface_t {
     /// Make a new view_node corresponding to the given view.
     std::unique_ptr<ViewNode> init_view_node(wayfire_view view);
 
-    /// Destroy the view node corresponging to the given view.
-    void fini_view(wayfire_view view);
-
     /// Initialize gesture grab interfaces and activators.
     void init_grab_interface();
 
@@ -647,10 +662,6 @@ class Swayfire : public wf::plugin_interface_t {
 
     // == Signal Handlers == //
 
-    wf::signal_connection_t on_shutdown = [&](wf::signal_data_t *) {
-        output->disconnect_signal(&on_view_unmapped);
-    };
-
     /// Handle new created views.
     wf::signal_connection_t on_view_attached = [&](wf::signal_data_t *data) {
         auto view = wf::get_signaled_view(data);
@@ -666,28 +677,9 @@ class Swayfire : public wf::plugin_interface_t {
         ws->insert_tiled_node(init_view_node(view));
     };
 
-    /// Handle unmapped views.
-    wf::signal_connection_t on_view_unmapped = [&](wf::signal_data_t *data) {
-        fini_view(wf::get_signaled_view(data));
-    };
-
-    /// Handle focused view changes.
-    wf::signal_connection_t on_view_focused = [&](wf::signal_data_t *data) {
-        auto view = wf::get_signaled_view(data);
-        if (auto vdata = view->get_data<ViewData>()) {
-            auto node = vdata->node;
-
-            workspaces.get(node->get_wsid())->set_active_node(node);
-        }
-    };
-
-    wf::signal_connection_t on_workarea_changed = [&](wf::signal_data_t *data) {
-        auto wcdata = static_cast<wf::workarea_changed_signal *>(data);
-        workspaces.for_each(
-            [&](auto ws) { ws->set_workarea(wcdata->new_workarea); });
-    };
-
   public:
+    WorkspaceRef get_current_workspace();
+
     // == Impl wf::plugin_interface_t ==
 
     void init() override;
