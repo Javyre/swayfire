@@ -23,6 +23,7 @@
 #include <wayfire/workspace-manager.hpp>
 
 #define FLOATING_MOVE_STEP 5
+#define MIN_VIEW_SIZE 20
 
 using OutputRef = nonstd::observer_ptr<wf::output_t>;
 

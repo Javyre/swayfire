@@ -830,6 +830,23 @@ void Workspace::set_active_child(Node node) {
 void Workspace::set_workarea(wf::geometry_t geo) {
     workarea = geo;
     tiled_root->set_geometry(geo);
+
+    for (auto &floating : floating_nodes) {
+        auto ngeo = floating->get_geometry();
+
+        // Make sure they are still visible in the workarea.
+
+        if (geo.width > MIN_VIEW_SIZE)
+            ngeo.x = std::clamp(ngeo.x, MIN_VIEW_SIZE - ngeo.width,
+                                geo.width - MIN_VIEW_SIZE);
+
+        if (geo.height > MIN_VIEW_SIZE)
+            ngeo.y = std::clamp(ngeo.y, MIN_VIEW_SIZE - ngeo.height,
+                                geo.height - MIN_VIEW_SIZE);
+
+        // Refresh their geometry.
+        floating->set_geometry(ngeo);
+    }
 }
 
 void Workspace::toggle_tile_node(Node node) {
