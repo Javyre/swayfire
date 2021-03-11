@@ -637,17 +637,22 @@ class Swayfire : public wf::plugin_interface_t {
     bool on_##NAME(wf::keybinding_t);
 
     DECL_KEY(toggle_split_direction);
+
     DECL_KEY(set_want_vsplit);
     DECL_KEY(set_want_hsplit);
+
     DECL_KEY(focus_left);
     DECL_KEY(focus_right);
     DECL_KEY(focus_down);
     DECL_KEY(focus_up);
+
     DECL_KEY(toggle_focus_tile);
+
     DECL_KEY(move_left);
     DECL_KEY(move_right);
     DECL_KEY(move_down);
     DECL_KEY(move_up);
+
     DECL_KEY(toggle_tile);
 #undef DECL_KEY
 

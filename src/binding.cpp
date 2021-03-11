@@ -113,32 +113,32 @@ bool Swayfire::on_toggle_tile(wf::keybinding_t) {
 void Swayfire::bind_keys() {
     using namespace std::placeholders;
 
-#define ADD_KEY(KEY, BIND)                                                     \
+#define BIND_KEY(BIND)                                                         \
     {                                                                          \
         auto cb = std::make_unique<wf::key_callback>(                          \
-            [&](auto b) { return BIND(b); });                                  \
-        output->add_key(KEY, cb.get());                                        \
+            [&](auto b) { return on_##BIND(b); });                             \
+        output->add_key(key_##BIND, cb.get());                                 \
         key_callbacks.push_back(std::move(cb));                                \
     }
 
-    ADD_KEY(key_toggle_split_direction, on_toggle_split_direction);
+    BIND_KEY(toggle_split_direction);
 
-    ADD_KEY(key_set_want_vsplit, on_set_want_vsplit);
-    ADD_KEY(key_set_want_hsplit, on_set_want_hsplit);
+    BIND_KEY(set_want_vsplit);
+    BIND_KEY(set_want_hsplit);
 
-    ADD_KEY(key_focus_left, on_focus_left);
-    ADD_KEY(key_focus_right, on_focus_right);
-    ADD_KEY(key_focus_down, on_focus_down);
-    ADD_KEY(key_focus_up, on_focus_up);
+    BIND_KEY(focus_left);
+    BIND_KEY(focus_right);
+    BIND_KEY(focus_down);
+    BIND_KEY(focus_up);
 
-    ADD_KEY(key_toggle_focus_tile, on_toggle_focus_tile);
+    BIND_KEY(toggle_focus_tile);
 
-    ADD_KEY(key_move_left, on_move_left);
-    ADD_KEY(key_move_right, on_move_right);
-    ADD_KEY(key_move_down, on_move_down);
-    ADD_KEY(key_move_up, on_move_up);
+    BIND_KEY(move_left);
+    BIND_KEY(move_right);
+    BIND_KEY(move_down);
+    BIND_KEY(move_up);
 
-    ADD_KEY(key_toggle_tile, on_toggle_tile);
+    BIND_KEY(toggle_tile);
 #undef ADD_KEY
 }
 
