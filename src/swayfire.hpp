@@ -288,12 +288,13 @@ class ViewNode : public INode {
     };
 
     /// Handle unmapped views.
-    ///
-    /// Destroys the view node and the custom data attached to the view.
     wf::signal_connection_t on_unmapped = [&](wf::signal_data_t *) {
-        parent->remove_child(this);
-        // view node dies here.
+        // can't inline it here since depends on ws methods.
+        on_unmapped_impl();
     };
+
+    /// Destroys the view node and the custom data attached to the view.
+    void on_unmapped_impl();
 
   public:
     /// The wayfire view corresponding to this node.
@@ -520,6 +521,9 @@ class Workspace : public INodeParent {
 
     /// Remove a node from this ws.
     OwnedNode remove_node(Node node);
+
+    /// Clean up after a node has been removed from this ws.
+    void node_removed(Node node);
 
     /// Toggle tiling on a ndoe in this ws.
     void toggle_tile_node(Node node);
