@@ -4,6 +4,8 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <optional>
+#include <utility>
 #include <wayfire/config/types.hpp>
 #include <wayfire/core.hpp>
 #include <wayfire/geometry.hpp>
@@ -239,21 +241,22 @@ NodeParent ViewNode::get_or_upgrade_to_parent_node() {
 
 // SplitNode
 
-void SplitNode::insert_child_at(NodeIter at, OwnedNode node) {
+void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
     node->parent = this;
 
     float shrink_ratio = (float)children.size() / (float)(children.size() + 1);
     float total_ratio = 0;
 
-    for (auto &cr : children_ratios) {
-        cr *= shrink_ratio;
-        total_ratio += cr;
+    for (auto &c : children) {
+        c.ratio *= shrink_ratio;
+        total_ratio += c.ratio;
     }
-    children_ratios.insert(children_ratios.begin() +
-                               std::distance(children.begin(), at),
-                           1.0f - total_ratio);
 
-    children.insert(at, std::move(node));
+    SplitChild nchild;
+    nchild.node = std::move(node);
+    nchild.ratio = 1.0f - total_ratio;
+
+    children.insert(at, std::move(nchild));
     refresh_geometry();
 }
 
@@ -281,9 +284,9 @@ void SplitNode::insert_child_back_of(Node of, OwnedNode node) {
     insert_child_at(child + 1, std::move(node));
 }
 
-NodeIter SplitNode::find_child(Node node) {
+SplitChildIter SplitNode::find_child(Node node) {
     return std::find_if(children.begin(), children.end(),
-                        [&](auto &c) { return c.get() == node.get(); });
+                        [&](auto &c) { return c.node.get() == node.get(); });
 }
 
 OwnedNode SplitNode::remove_child(Node node) {
@@ -291,22 +294,7 @@ OwnedNode SplitNode::remove_child(Node node) {
     if (child == children.end())
         LOGE("Node ", node, " not found in split node: ", this);
 
-    children_ratios.erase(children_ratios.begin() +
-                          std::distance(children.begin(), child));
-
-    if (!children_ratios.empty()) {
-        float grow_ratio = (float)(children_ratios.size() + 1) /
-                           (float)(children_ratios.size());
-        float total_ratio = 0;
-        for (auto i = children_ratios.begin(); i != children_ratios.end() - 1;
-             i++) {
-            *i *= grow_ratio;
-            total_ratio += *i;
-        }
-        children_ratios.back() = 1.0f - total_ratio;
-    }
-
-    auto owned_node = std::move(*child);
+    auto owned_node = std::move(child->node);
     children.erase(child);
 
     if (children.empty()) {
@@ -314,6 +302,17 @@ OwnedNode SplitNode::remove_child(Node node) {
     } else {
         active_child = std::clamp(active_child, (uint32_t)0,
                                   (uint32_t)(children.size() - 1));
+    }
+
+    if (!children.empty()) {
+        float grow_ratio =
+            (float)(children.size() + 1) / (float)(children.size());
+        float total_ratio = 0;
+        for (auto i = children.begin(); i != children.end() - 1; i++) {
+            i->ratio *= grow_ratio;
+            total_ratio += i->ratio;
+        }
+        children.back().ratio = 1.0f - total_ratio;
     }
 
     refresh_geometry();
@@ -346,7 +345,7 @@ void SplitNode::toggle_split_direction() {
 
 Node SplitNode::try_downgrade() {
     if (children.size() == 1) {
-        auto only_child = remove_child(children.at(active_child));
+        auto only_child = remove_child(children.at(active_child).node.get());
         auto only_child_ref = only_child.get();
 
         if (auto vnode = only_child->as_view_node())
@@ -365,10 +364,10 @@ OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
     if (child == children.end())
         LOGE("Node ", node, " not found in split node: ", this);
 
-    other->set_geometry((*child)->get_geometry());
+    other->set_geometry(child->node->get_geometry());
     other->parent = this;
 
-    (*child).swap(other);
+    child->node.swap(other);
 
     return other;
 }
@@ -378,11 +377,11 @@ Node SplitNode::get_last_active_node() {
         return nullptr;
 
     auto &child = children.at(active_child);
-    if (auto split = child->as_split_node())
+    if (auto split = child.node->as_split_node())
         if (auto la = split->get_last_active_node())
             return la;
 
-    return child.get();
+    return child.node.get();
 }
 
 Node SplitNode::get_adjacent(Node node, Direction dir) {
@@ -396,10 +395,10 @@ Node SplitNode::get_adjacent(Node node, Direction dir) {
         switch (dir) {
 #define PREV_NODE                                                              \
     child == children.begin() ? parent->get_adjacent(this, dir)                \
-                              : child[-1].get()
+                              : child[-1].node.get()
 #define NEXT_NODE                                                              \
     child == (children.end() - 1) ? parent->get_adjacent(this, dir)            \
-                                  : child[1].get()
+                                  : child[1].node.get()
         case Direction::LEFT:
             return PREV_NODE;
         case Direction::RIGHT:
@@ -454,17 +453,18 @@ SplitNodeRef SplitNode::find_parent_split(bool horiz) {
         return nullptr;
 }
 
-bool SplitNode::move_child_outside(NodeIter child, Direction dir) {
+bool SplitNode::move_child_outside(SplitChildIter child, Direction dir) {
     if (auto adj = parent->get_adjacent(this, dir)) {
         if (auto adj_split = adj->parent->as_split_node()) {
             switch (dir) {
             case Direction::LEFT:
             case Direction::UP:
-                adj_split->insert_child_back_of(adj, remove_child(*child));
+                adj_split->insert_child_back_of(adj, remove_child(child->node));
                 break;
             case Direction::RIGHT:
             case Direction::DOWN:
-                adj_split->insert_child_front_of(adj, remove_child(*child));
+                adj_split->insert_child_front_of(adj,
+                                                 remove_child(child->node));
                 break;
             }
             return true;
@@ -473,25 +473,25 @@ bool SplitNode::move_child_outside(NodeIter child, Direction dir) {
         switch (dir) {
         case Direction::LEFT:
             if (auto p = find_parent_split(true)) {
-                p->insert_child_front(remove_child(*child));
+                p->insert_child_front(remove_child(child->node));
                 return true;
             }
             break;
         case Direction::RIGHT:
             if (auto p = find_parent_split(true)) {
-                p->insert_child_back(remove_child(*child));
+                p->insert_child_back(remove_child(child->node));
                 return true;
             }
             break;
         case Direction::UP:
             if (auto p = find_parent_split(false)) {
-                p->insert_child_front(remove_child(*child));
+                p->insert_child_front(remove_child(child->node));
                 return true;
             }
             break;
         case Direction::DOWN:
             if (auto p = find_parent_split(false)) {
-                p->insert_child_back(remove_child(*child));
+                p->insert_child_back(remove_child(child->node));
                 return true;
             }
             break;
@@ -510,16 +510,17 @@ bool SplitNode::move_child(Node node, Direction dir) {
         if (child == children.begin()) {                                       \
             return move_child_outside(child, dir);                             \
         } else {                                                               \
-            if (auto adj_split = child[-1]->as_split_node()) {                 \
-                adj_split->insert_child_back(remove_child(*child));            \
+            if (auto adj_split = child[-1].node->as_split_node()) {            \
+                adj_split->insert_child_back(remove_child(child->node));       \
                 return true;                                                   \
-            } else if (auto adj_view = child[-1]->as_view_node()) {            \
+            } else if (auto adj_view = child[-1].node->as_view_node()) {       \
                 if (auto adj_split = adj_view->try_upgrade()) {                \
-                    adj_split->insert_child_back(remove_child(*child));        \
+                    adj_split->insert_child_back(remove_child(child->node));   \
                     return true;                                               \
                 }                                                              \
             }                                                                  \
-            insert_child_front_of(child[-1].get(), remove_child(*child));      \
+            insert_child_front_of(child[-1].node.get(),                        \
+                                  remove_child(child->node));                  \
             return true;                                                       \
         }                                                                      \
     }
@@ -529,16 +530,17 @@ bool SplitNode::move_child(Node node, Direction dir) {
         if (child == children.end() - 1) {                                     \
             return move_child_outside(child, dir);                             \
         } else {                                                               \
-            if (auto adj_split = child[1]->as_split_node()) {                  \
-                adj_split->insert_child_front(remove_child(*child));           \
+            if (auto adj_split = child[1].node->as_split_node()) {             \
+                adj_split->insert_child_front(remove_child(child->node));      \
                 return true;                                                   \
-            } else if (auto adj_view = child[1]->as_view_node()) {             \
+            } else if (auto adj_view = child[1].node->as_view_node()) {        \
                 if (auto adj_split = adj_view->try_upgrade()) {                \
-                    adj_split->insert_child_front(remove_child(*child));       \
+                    adj_split->insert_child_front(remove_child(child->node));  \
                     return true;                                               \
                 }                                                              \
             }                                                                  \
-            insert_child_back_of(child[1].get(), remove_child(*child));        \
+            insert_child_back_of(child[1].node.get(),                          \
+                                 remove_child(child->node));                   \
             return true;                                                       \
         }                                                                      \
     }
@@ -583,7 +585,7 @@ void SplitNode::set_ws(WorkspaceRef ws) {
     INode::set_ws(ws);
 
     for (auto &child : children)
-        child->set_ws(ws);
+        child.node->set_ws(ws);
 }
 
 void SplitNode::set_geometry(wf::geometry_t geo) {
@@ -594,7 +596,7 @@ void SplitNode::set_geometry(wf::geometry_t geo) {
         auto total = 0;                                                        \
         unsigned int i = 0;                                                    \
         for (auto &child : children) {                                         \
-            auto subgeo = child->get_geometry();                               \
+            auto subgeo = child.node->get_geometry();                          \
                                                                                \
             subgeo.pos1 = geo.pos1 + total;                                    \
             subgeo.pos2 = geo.pos2;                                            \
@@ -602,12 +604,12 @@ void SplitNode::set_geometry(wf::geometry_t geo) {
             if (i == children.size() - 1) {                                    \
                 subgeo.dim1 = geo.dim1 - total;                                \
             } else {                                                           \
-                subgeo.dim1 = geo.dim1 * children_ratios[i];                   \
+                subgeo.dim1 = geo.dim1 * child.ratio;                          \
                 total += subgeo.dim1;                                          \
             }                                                                  \
             subgeo.dim2 = geo.dim2;                                            \
                                                                                \
-            child->set_geometry(subgeo);                                       \
+            child.node->set_geometry(subgeo);                                  \
             i++;                                                               \
         }                                                                      \
     }
@@ -620,12 +622,12 @@ void SplitNode::set_geometry(wf::geometry_t geo) {
 #undef DISTRIBUTE
     case SplitType::TABBED: {
         for (auto &child : children)
-            child->set_geometry(geo);
+            child.node->set_geometry(geo);
         break;
     }
     case SplitType::STACKED: {
         for (auto &child : children)
-            child->set_geometry(geo);
+            child.node->set_geometry(geo);
         break;
     }
     }

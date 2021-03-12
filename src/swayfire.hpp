@@ -349,17 +349,30 @@ struct ViewData : wf::custom_data_t {
     ViewData(ViewNodeRef node) : node(node) {}
 };
 
+/// A child of a split node.
+struct SplitChild {
+    /// Prefered size for the child node.
+    ///
+    /// This get's set at the beginning of a continuous resize.
+    std::optional<uint32_t> preferred_size;
+
+    float ratio;    ///< The size ratio of child.
+    OwnedNode node; ///< A direct child node of the split.
+};
+
+using SplitChildIter = std::vector<SplitChild>::iterator;
+
 /// A split node containing children.
 class SplitNode : public INode, public INodeParent {
   private:
     /// Find a direct child of this parent node.
-    NodeIter find_child(Node node);
+    SplitChildIter find_child(Node node);
 
     /// Move a direct child outside of this parent in the given direction.
     ///
     /// This either moves the node into an adjacent parent node or at the
     /// back/front of an (in)direct parent.
-    bool move_child_outside(NodeIter child, Direction dir);
+    bool move_child_outside(SplitChildIter child, Direction dir);
 
     /// Walk up the tree to find the first split node parent that is (not)
     /// horizontal.
@@ -368,13 +381,12 @@ class SplitNode : public INode, public INodeParent {
   public:
     SplitType split_type = SplitType::VSPLIT; ///< The split type of this node.
     uint32_t active_child = 0;                ///< Index of last active child.
-    std::vector<float> children_ratios;       ///< The Size ratios of children.
-    std::vector<OwnedNode> children;          ///< The direct children nodes.
+    std::vector<SplitChild> children;         ///< The direct children nodes.
 
     SplitNode(wf::geometry_t geo) { geometry = geo; }
 
     /// Insert a direct child at the given position in children.
-    void insert_child_at(NodeIter at, OwnedNode node);
+    void insert_child_at(SplitChildIter at, OwnedNode node);
 
     /// Insert a direct child at the front of children.
     void insert_child_front(OwnedNode node);
