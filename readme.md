@@ -19,7 +19,9 @@ Notable planned features:
 - Option for rounded corners for floating windows and window groups
 - Scratchpad
 
-## Compiling and Installing
+## Installation
+
+To build and install from source:
 ```sh
 # Swayfire is developped using clang, but should compile with gcc as
 # well at least. The following exports are optional:
@@ -35,6 +37,18 @@ meson compile -C build
 # To install Swayfire:
 meson install -C build
 ```
+
+Alternatively, Swayfire has been packaged for the following distros:
+
+###### Arch Linux
+
+[swayfire-git] is available in the AUR.
+
+```sh
+yay -S swayfire-git
+```
+
+[swayfire-git]: https://aur.archlinux.org/packages/swayfire-git/
 
 ## Contributing
 
