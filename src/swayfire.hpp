@@ -400,6 +400,9 @@ class SplitNode : public INode, public INodeParent {
     /// Insert a direct child just after another direct child.
     void insert_child_back_of(Node of, OwnedNode node);
 
+    /// Remove a direct child from the given position in children.
+    OwnedNode remove_child_at(SplitChildIter child);
+
     /// Toggle the split direction of this node.
     void toggle_split_direction();
 
