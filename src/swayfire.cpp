@@ -714,13 +714,6 @@ OwnedNode Workspace::remove_floating_node(Node node) {
         active_floating = std::clamp(active_floating, (uint32_t)0,
                                      (uint32_t)(floating_nodes.size() - 1));
 
-    if (owned_node.get() == active_node.get()) {
-        if (auto afn = get_active_floating_node())
-            active_node = afn;
-        else
-            active_node = get_active_tiled_node();
-    }
-
     return owned_node;
 }
 
@@ -774,7 +767,13 @@ OwnedNode Workspace::remove_tiled_node(Node node) {
         return nullptr;
     }
 
-    return node->parent->remove_child(node);
+    auto old_parent = node->parent;
+    auto owned_node = node->parent->remove_child(node);
+
+    if (active_tiled_node.get() == node.get())
+        active_tiled_node = old_parent->get_last_active_node();
+
+    return owned_node;
 }
 
 OwnedNode Workspace::remove_node(Node node) {
@@ -883,8 +882,13 @@ void Workspace::toggle_tile_node(Node node) {
 
     if (node->get_floating()) {
         insert_tiled_node(remove_floating_node(node));
+        if (active_node.get() == node.get())
+            active_tiled_node = node.get();
     } else {
         insert_floating_node(remove_tiled_node(node));
+        if (active_node.get() == node.get())
+            active_floating =
+                std::distance(floating_nodes.begin(), find_floating(node));
     }
 }
 
