@@ -182,9 +182,9 @@ class INode : public virtual IDisplay {
     /// children.
     bool floating = false;
 
-    WorkspaceRef ws;         ///< The workspace by which this node is managed.
-    wf::geometry_t geometry; ///< The outer geometry of this node.
-    uint node_id;            ///< The id of this node.
+    WorkspaceRef ws = nullptr; ///< The workspace by which this node is managed.
+    wf::geometry_t geometry;   ///< The outer geometry of this node.
+    uint node_id;              ///< The id of this node.
 
     INode() : node_id(id_counter) { id_counter++; }
 
@@ -419,9 +419,7 @@ class SplitNode : public INode, public INodeParent {
     Node get_adjacent(Node node, Direction dir) override;
     bool move_child(Node node, Direction dir) override;
     Node get_last_active_node() override;
-    void insert_child(OwnedNode node) override {
-        insert_child_back(std::move(node));
-    };
+    void insert_child(OwnedNode node) override;
     OwnedNode remove_child(Node node) override;
     OwnedNode swap_child(Node node, OwnedNode other) override;
     void set_active_child(Node node) override;
@@ -466,10 +464,10 @@ class Workspace : public INodeParent {
 
   private:
     /// Reference to the node currently active in this ws.
-    Node active_node;
+    Node active_node = nullptr;
 
     /// Reference to the tiled node last active in this ws.
-    Node active_tiled_node;
+    Node active_tiled_node = nullptr;
 
     /// The last active floating node index.
     uint32_t active_floating = 0;

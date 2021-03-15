@@ -181,7 +181,12 @@ ViewNode::~ViewNode() {
 void ViewNode::on_unmapped_impl() {
     // ws might get unset on remove_child so we must save it.
     auto ws = this->ws;
+    auto old_parent = parent;
+
     parent->remove_child(this);
+    if (auto split = old_parent->as_split_node())
+        split->try_downgrade();
+
     ws->node_removed(this);
 
     // view node dies here.
@@ -243,6 +248,8 @@ NodeParent ViewNode::get_or_upgrade_to_parent_node() {
 
 void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
     node->parent = this;
+    node->set_floating(false);
+    node->set_ws(get_ws());
 
     float shrink_ratio = (float)children.size() / (float)(children.size() + 1);
     float total_ratio = 0;
@@ -267,6 +274,10 @@ void SplitNode::insert_child_front(OwnedNode node) {
 void SplitNode::insert_child_back(OwnedNode node) {
     insert_child_at(children.end(), std::move(node));
 }
+
+void SplitNode::insert_child(OwnedNode node) {
+    insert_child_back(std::move(node));
+};
 
 void SplitNode::insert_child_front_of(Node of, OwnedNode node) {
     auto child = find_child(of);
@@ -349,13 +360,26 @@ void SplitNode::toggle_split_direction() {
 
 Node SplitNode::try_downgrade() {
     if (children.size() == 1) {
+        // Can only swap tiled_root of workspace with a split node.
+        if (get_ws()->tiled_root.get() == this &&
+            !children.front().node->as_split_node())
+            return nullptr;
+
         auto only_child = remove_child_at(children.begin() + active_child);
         auto only_child_ref = only_child.get();
 
         if (auto vnode = only_child->as_view_node())
             vnode->prefered_split_type = split_type;
 
+        bool was_active = false;
+        if (auto active = get_ws()->get_active_node())
+            was_active = active.get() == this;
+
         parent->swap_child(this, std::move(only_child));
+
+        if (was_active)
+            only_child_ref->set_active();
+
         return only_child_ref;
     }
     return nullptr;
@@ -368,8 +392,10 @@ OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
     if (child == children.end())
         LOGE("Node ", node, " not found in split node: ", this);
 
-    other->set_geometry(child->node->get_geometry());
     other->parent = this;
+    other->set_floating(false);
+    other->set_ws(get_ws());
+    other->set_geometry(child->node->get_geometry());
 
     child->node.swap(other);
 
@@ -659,9 +685,9 @@ void Workspace::set_active_node(Node node) {
 Node Workspace::get_active_node() { return active_node; }
 
 void Workspace::insert_floating_node(OwnedNode node) {
+    node->parent = this;
     node->set_floating(true);
     node->set_ws(this);
-    node->parent = this;
     floating_nodes.push_back(std::move(node));
 }
 
@@ -695,8 +721,6 @@ OwnedNode Workspace::remove_floating_node(Node node) {
             active_node = get_active_tiled_node();
     }
 
-    owned_node->set_floating(false);
-
     return owned_node;
 }
 
@@ -708,9 +732,9 @@ OwnedNode Workspace::swap_floating_node(Node node, OwnedNode other) {
         return nullptr;
     }
 
+    other->parent = this;
     other->set_floating(true);
     other->set_ws(this);
-    other->parent = this;
     other->set_geometry((*child)->get_geometry());
 
     (*child).swap(other);
@@ -731,16 +755,14 @@ OwnedNode Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
     auto ret = std::move(tiled_root);
 
     tiled_root = std::move(other);
+    tiled_root->parent = this;
     tiled_root->set_floating(false);
     tiled_root->set_ws(this);
-    tiled_root->parent = this;
 
     return ret;
 }
 
 void Workspace::insert_tiled_node(OwnedNode node) {
-    node->set_floating(false);
-    node->set_ws(this);
     auto parent = get_active_node()->get_or_upgrade_to_parent_node();
 
     parent->insert_child(std::move(node));
@@ -772,9 +794,6 @@ void Workspace::node_removed(Node node) {
 }
 
 void Workspace::insert_child(OwnedNode node) {
-    node->set_floating(false);
-    node->set_ws(this);
-
     tiled_root->insert_child(std::move(node));
 }
 
@@ -811,7 +830,13 @@ OwnedNode Workspace::swap_child(Node node, OwnedNode other) {
         // floating nodes are always direct children of the workspace
         return swap_floating_node(node, std::move(other));
     } else if (node.get() == tiled_root.get()) {
-        LOGE("Cannot swap node with tiled-root node of ", this);
+        auto other_ = other.release();
+        if (auto other_split = dynamic_cast<SplitNode *>(other_))
+            return swap_tiled_root(std::unique_ptr<SplitNode>(other_split));
+
+        LOGE("Cannot swap non-split node with tiled-root node of ", this);
+
+        delete other_;
         return nullptr;
     } else {
         LOGE("Node is not a direct child of ", this, ": ", node);
