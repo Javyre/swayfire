@@ -41,6 +41,12 @@ wf::geometry_t local_to_relative_geometry(wf::geometry_t geo,
 /// Get the center point of a geo.
 wf::point_t geometry_center(wf::geometry_t geo);
 
+/// Apply std::min on both components of the two dimensions independently.
+wf::dimensions_t min(const wf::dimensions_t &a, const wf::dimensions_t &b);
+
+/// Apply std::max on both components of the two dimensions independently.
+wf::dimensions_t max(const wf::dimensions_t &a, const wf::dimensions_t &b);
+
 #define NONWF_ALL_EDGES                                                        \
     (WLR_EDGE_LEFT | WLR_EDGE_RIGHT | WLR_EDGE_TOP | WLR_EDGE_BOTTOM)
 
@@ -145,6 +151,16 @@ class INodeParent : public virtual IDisplay {
     /// \return True if the child was moved.
     virtual bool move_child(Node node, Direction dir) = 0;
 
+    /// Try to resize the child to the given dimensions by moving the given
+    /// edges.
+    ///
+    /// This call bubbles upward resizing this split in its parent if this split
+    /// cannot contain the new dimensions.
+    ///
+    /// \return the new dimensions after this call.
+    virtual wf::dimensions_t
+    try_resize_child(Node child, wf::dimensions_t ndims, uint32_t edges) = 0;
+
     /// Get the deepest last active child node.
     ///
     /// The returned node may be an indirect child of this parent.
@@ -189,6 +205,13 @@ class INode : public virtual IDisplay {
     INode() : node_id(id_counter) { id_counter++; }
 
   public:
+    /// Prefered geo for the node.
+    ///
+    /// This get's set at the beginning of a continuous resize.
+    /// This currently gets used as a maximum preferred size during continuous
+    /// resizes.
+    std::optional<wf::dimensions_t> preferred_size = std::nullopt;
+
     NodeParent parent; ///< The parent of this node.
 
     /// Dynamic cast to SplitNodeRef.
@@ -217,7 +240,18 @@ class INode : public virtual IDisplay {
     /// the requested dimensions. This may be a noop: if neither the right or
     /// left edges are moving for example, the new width dimension will not be
     /// applied.
-    virtual void try_resize(wf::dimensions_t ndims, uint32_t edges);
+    ///
+    /// \return the new dimensions after this call.
+    virtual wf::dimensions_t try_resize(wf::dimensions_t ndims, uint32_t edges);
+
+    /// Begin a continuous resize on this node and its children.
+    virtual void begin_resize() {
+        auto geo = get_geometry();
+        preferred_size = {geo.width, geo.height};
+    };
+
+    /// End a continuous resize on this node and its children.
+    virtual void end_resize() { preferred_size = std::nullopt; };
 
     /// Get whether this node is floating.
     bool get_floating() { return floating; };
@@ -304,11 +338,8 @@ class ViewNode : public INode {
     /// The last floating geometry of this node.
     wf::geometry_t floating_geometry;
 
-    /// The moving edges during a continuous resize.
-    std::optional<uint32_t> resizing_edges;
-
     /// The prefered split type for upgrading this node to a split node.
-    std::optional<SplitType> prefered_split_type;
+    std::optional<SplitType> prefered_split_type = std::nullopt;
 
     /// The geo enforcer transformer attached to the view.
     nonstd::observer_ptr<ViewGeoEnforcer> geo_enforcer;
@@ -351,11 +382,6 @@ struct ViewData : wf::custom_data_t {
 
 /// A child of a split node.
 struct SplitChild {
-    /// Prefered size for the child node.
-    ///
-    /// This get's set at the beginning of a continuous resize.
-    std::optional<uint32_t> preferred_size;
-
     float ratio;    ///< The size ratio of child.
     OwnedNode node; ///< A direct child node of the split.
 };
@@ -377,6 +403,27 @@ class SplitNode : public INode, public INodeParent {
     /// Walk up the tree to find the first split node parent that is (not)
     /// horizontal.
     SplitNodeRef find_parent_split(bool horiz);
+
+    /// Try to move the edge at the back or front of a child by the given amount
+    /// of pixels.
+    ///
+    /// \return the delta actually applied on the edge.
+    int32_t try_move_edge(SplitChildIter child, int32_t delta, bool front,
+                          bool use_preferred_sizes = false);
+
+    /// Try to move the edge at the front of a child by the given amount
+    /// of pixels.
+    ///
+    /// \return the delta actually applied on the edge.
+    inline int32_t try_move_front_edge(SplitChildIter child, int32_t delta,
+                                       bool use_preferred_sizes = false);
+
+    /// Try to move the edge at the back of a child by the given amount
+    /// of pixels.
+    ///
+    /// \return the delta actually applied on the edge.
+    inline int32_t try_move_back_edge(SplitChildIter child, int32_t delta,
+                                      bool use_preferred_sizes = false);
 
   public:
     SplitType split_type = SplitType::VSPLIT; ///< The split type of this node.
@@ -418,6 +465,8 @@ class SplitNode : public INode, public INodeParent {
 
     Node get_adjacent(Node node, Direction dir) override;
     bool move_child(Node node, Direction dir) override;
+    wf::dimensions_t try_resize_child(Node child, wf::dimensions_t ndims,
+                                      uint32_t edges) override;
     Node get_last_active_node() override;
     void insert_child(OwnedNode node) override;
     OwnedNode remove_child(Node node) override;
@@ -427,6 +476,8 @@ class SplitNode : public INode, public INodeParent {
     // == INode impl ==
 
     void set_geometry(wf::geometry_t geo) override;
+    void begin_resize() override;
+    void end_resize() override;
     void set_floating(bool fl) override;
     void set_ws(WorkspaceRef ws) override;
     NodeParent get_or_upgrade_to_parent_node() override;
@@ -546,6 +597,8 @@ class Workspace : public INodeParent {
 
     Node get_adjacent(Node node, Direction dir) override;
     bool move_child(Node node, Direction dir) override;
+    wf::dimensions_t try_resize_child(Node child, wf::dimensions_t ndims,
+                                      uint32_t edges) override;
     Node get_last_active_node() override;
     void insert_child(OwnedNode node) override;
     OwnedNode remove_child(Node node) override;

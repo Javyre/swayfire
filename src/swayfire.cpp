@@ -1,6 +1,7 @@
 #include "swayfire.hpp"
 #include "grab.hpp"
 #include <algorithm>
+#include <bits/stdint-intn.h>
 #include <functional>
 #include <iterator>
 #include <memory>
@@ -52,6 +53,22 @@ wf::point_t nonwf::geometry_center(wf::geometry_t geo) {
     };
 }
 
+wf::dimensions_t nonwf::min(const wf::dimensions_t &a,
+                            const wf::dimensions_t &b) {
+    return {
+        std::min(a.width, b.width),
+        std::min(a.height, b.height),
+    };
+}
+
+wf::dimensions_t nonwf::max(const wf::dimensions_t &a,
+                            const wf::dimensions_t &b) {
+    return {
+        std::max(a.width, b.width),
+        std::max(a.height, b.height),
+    };
+}
+
 // INodeParent
 
 SplitNodeRef INodeParent::as_split_node() {
@@ -63,33 +80,6 @@ SplitNodeRef INodeParent::as_split_node() {
 SplitNodeRef INode::as_split_node() { return dynamic_cast<SplitNode *>(this); }
 
 ViewNodeRef INode::as_view_node() { return dynamic_cast<ViewNode *>(this); }
-
-void INode::try_resize(wf::dimensions_t ndims, uint32_t edges) {
-    if (get_floating()) {
-        auto ngeo = get_geometry();
-
-        auto hori_locked = (edges & (WLR_EDGE_LEFT | WLR_EDGE_RIGHT)) == 0;
-        auto vert_locked = (edges & (WLR_EDGE_TOP | WLR_EDGE_BOTTOM)) == 0;
-
-        if (!hori_locked) {
-            if (edges & WLR_EDGE_LEFT) {
-                int dw = ndims.width - ngeo.width;
-                ngeo.x -= dw;
-            }
-            ngeo.width = ndims.width;
-        }
-
-        if (!vert_locked) {
-            if (edges & WLR_EDGE_TOP) {
-                int dh = ndims.height - ngeo.height;
-                ngeo.y -= dh;
-            }
-            ngeo.height = ndims.height;
-        }
-
-        set_geometry(ngeo);
-    }
-}
 
 void INode::set_active() {
     parent->set_active_child(this);
@@ -224,7 +214,7 @@ SplitNodeRef ViewNode::try_upgrade() {
         owned_self->set_floating(false);
         new_parent_ref->insert_child_back(std::move(owned_self));
 
-        prefered_split_type = {};
+        prefered_split_type = std::nullopt;
         return new_parent_ref;
     }
     return nullptr;
@@ -782,8 +772,9 @@ OwnedNode Workspace::remove_node(Node node) {
 }
 
 void Workspace::node_removed(Node node) {
-    // The case for a floating node is already covered in remove_floating_node
-    // as floating nodes are always direct children of the ws.
+    // The case for a floating node is already covered in
+    // remove_floating_node as floating nodes are always direct children of
+    // the ws.
 
     if (node.get() == active_tiled_node.get())
         active_tiled_node = tiled_root.get();

@@ -1,6 +1,7 @@
 plugin_src = files([
     'binding.cpp',
     'grab.cpp',
+    'resize.cpp',
     'swayfire.cpp',
 ])
 

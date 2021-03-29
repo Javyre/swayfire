@@ -112,10 +112,12 @@ void ActiveResize::pointer_motion(uint32_t x, uint32_t y) {
     if (dw == 0 && dh == 0)
         return;
 
-    int nw = (resizing_edges & WLR_EDGE_LEFT) ? original_geo.width - dw
-                                              : original_geo.width + dw;
-    int nh = (resizing_edges & WLR_EDGE_TOP) ? original_geo.height - dh
-                                             : original_geo.height + dh;
+    int nw = (resizing_edges & WLR_EDGE_LEFT)    ? original_geo.width - dw
+             : (resizing_edges & WLR_EDGE_RIGHT) ? original_geo.width + dw
+                                                 : original_geo.width;
+    int nh = (resizing_edges & WLR_EDGE_TOP)      ? original_geo.height - dh
+             : (resizing_edges & WLR_EDGE_BOTTOM) ? original_geo.height + dh
+                                                  : original_geo.height;
 
     dragged->try_resize({nw, nh}, resizing_edges);
 }
@@ -134,12 +136,20 @@ ActiveResize::construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged) {
         ret->resizing_edges =
             resize_calc_resizing_edges(ret->original_geo, ret->pointer_start);
 
+        ret->root_node = ret->dragged->find_floating_parent();
+        if (!ret->root_node)
+            ret->root_node = ret->dragged->get_ws()->tiled_root.get();
+
+        ret->root_node->begin_resize();
+
         wf::get_core().set_cursor(
             wlr_xcursor_get_resize_name((wlr_edges)(ret->resizing_edges)));
 
         return ret;
     });
 }
+
+ActiveResize::~ActiveResize() { root_node->end_resize(); }
 
 // Swayfire
 
@@ -181,11 +191,9 @@ void Swayfire::init_grab_interface() {
     on_resize_activate = [&](auto) {
         if (auto view = wf::get_core().get_cursor_focus_view()) {
             if (auto vdata = view->get_data<ViewData>()) {
-                if (auto node = vdata->node->find_floating_parent()) {
-                    if (auto active = ActiveResize::construct(this, node)) {
-                        active_grab = std::move(active);
-                        return true;
-                    }
+                if (auto active = ActiveResize::construct(this, vdata->node)) {
+                    active_grab = std::move(active);
+                    return true;
                 }
             }
         }

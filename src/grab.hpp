@@ -77,6 +77,10 @@ class ActiveResize : public IActiveButtonDrag {
     /// The node being resized.
     Node dragged;
 
+    /// The root parent of the dragged node that isn't the workspace or just the
+    /// node itself if it is a direct child of the workspace.
+    Node root_node;
+
     /// The original outer geometry of the resizing node.
     wf::geometry_t original_geo;
 
@@ -90,6 +94,8 @@ class ActiveResize : public IActiveButtonDrag {
     ActiveResize(nonstd::observer_ptr<Swayfire> plugin,
                  wf::buttonbinding_t deactivate_butt)
         : IActiveButtonDrag(plugin, deactivate_butt) {}
+
+    ~ActiveResize() override;
 
     void pointer_motion(uint32_t x, uint32_t y) override;
 
