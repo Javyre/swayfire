@@ -1,6 +1,4 @@
 #include "swayfire.hpp"
-#include <wayfire/geometry.hpp>
-
 // INode
 
 wf::dimensions_t INode::try_resize(wf::dimensions_t ndims, uint32_t edges) {

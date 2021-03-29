@@ -1,15 +1,7 @@
 #include "grab.hpp"
 #include "swayfire.hpp"
 
-#include <bits/stdint-intn.h>
-#include <bits/stdint-uintn.h>
-#include <memory>
-#include <wayfire/config/types.hpp>
-#include <wayfire/geometry.hpp>
-#include <wayfire/nonstd/observer_ptr.h>
 #include <wayfire/nonstd/wlroots-full.hpp>
-#include <wayfire/plugin.hpp>
-#include <wlr/util/edges.h>
 
 // IActiveGrab
 

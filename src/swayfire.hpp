@@ -4,8 +4,8 @@
 #include <bits/stdint-intn.h>
 #include <bits/stdint-uintn.h>
 #include <memory>
+#include <optional>
 #include <sys/types.h>
-#include <variant>
 #include <vector>
 
 #include <wayfire/config/types.hpp>

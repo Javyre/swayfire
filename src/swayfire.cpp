@@ -1,17 +1,5 @@
 #include "swayfire.hpp"
 #include "grab.hpp"
-#include <algorithm>
-#include <bits/stdint-intn.h>
-#include <functional>
-#include <iterator>
-#include <memory>
-#include <optional>
-#include <utility>
-#include <wayfire/config/types.hpp>
-#include <wayfire/core.hpp>
-#include <wayfire/geometry.hpp>
-#include <wayfire/util/log.hpp>
-#include <wlr/util/edges.h>
 
 // nonwf
 
