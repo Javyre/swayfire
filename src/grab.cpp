@@ -59,7 +59,7 @@ ActiveMove::construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged) {
 
 // ActiveResize
 
-constexpr float RESIZE_MARGIN = 0.35f;
+constexpr double RESIZE_MARGIN = 0.35;
 uint32_t resize_calc_resizing_edges(wf::geometry_t geo, wf::point_t p) {
     if (!(geo & p)) {
         LOGE("Point not in geometry. Cannot calculate resizing egdes.");
@@ -68,8 +68,8 @@ uint32_t resize_calc_resizing_edges(wf::geometry_t geo, wf::point_t p) {
 
     uint32_t edges = WLR_EDGE_NONE;
 
-    auto vert_margin = (int)((float)geo.height * RESIZE_MARGIN);
-    auto hori_margin = (int)((float)geo.width * RESIZE_MARGIN);
+    auto vert_margin = (int)((double)geo.height * RESIZE_MARGIN);
+    auto hori_margin = (int)((double)geo.width * RESIZE_MARGIN);
 
     if ((p.x - geo.x) < hori_margin)
         edges |= WLR_EDGE_LEFT;

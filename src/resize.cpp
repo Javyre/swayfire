@@ -64,15 +64,15 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
                                          WLR_EDGE_TOP)
                       .height;
 
-        float scale = (float)size / (float)new_size;
+        double scale = (double)size / (double)new_size;
 
-        float total_ratio = 0;
+        double total_ratio = 0;
         child++;
         for (; child != children.end(); child++) {
             child->ratio *= scale;
             total_ratio += child->ratio;
         }
-        children.front().ratio = 1.0f - total_ratio;
+        children.front().ratio = 1.0 - total_ratio;
 
         return -(new_size - size);
     } else if (!front && child == children.end() - 1) {
@@ -91,16 +91,16 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
                                          WLR_EDGE_BOTTOM)
                       .height;
 
-        float scale = (float)size / (float)new_size;
+        double scale = (double)size / (double)new_size;
 
-        float total_ratio = 0;
+        double total_ratio = 0;
         auto rchild = std::reverse_iterator(child + 1);
         rchild++;
         for (; rchild != children.rend(); rchild++) {
             rchild->ratio *= scale;
             total_ratio += rchild->ratio;
         }
-        children.back().ratio = 1.0f - total_ratio;
+        children.back().ratio = 1.0 - total_ratio;
 
         return new_size - size;
     } else {
@@ -129,7 +129,7 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
             std::clamp(front ? other_size + delta : other_size - delta,
                        MIN_VIEW_SIZE, max_nother_size);
 
-        float nother_ratio = (float)nother_size / (float)total_size;
+        double nother_ratio = (double)nother_size / (double)total_size;
 
         child->ratio += other->ratio - nother_ratio;
         other->ratio = nother_ratio;

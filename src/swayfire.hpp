@@ -382,7 +382,7 @@ struct ViewData : wf::custom_data_t {
 
 /// A child of a split node.
 struct SplitChild {
-    float ratio;    ///< The size ratio of child.
+    double ratio;   ///< The size ratio of child.
     OwnedNode node; ///< A direct child node of the split.
 };
 

@@ -36,8 +36,8 @@ wf::geometry_t nonwf::local_to_relative_geometry(wf::geometry_t geo,
 
 wf::point_t nonwf::geometry_center(wf::geometry_t geo) {
     return {
-        (int)std::floor((float)(geo.x + geo.width) / 2.0f),
-        (int)std::floor((float)(geo.y + geo.height) / 2.0f),
+        (int)std::floor((double)(geo.x + geo.width) / 2.0),
+        (int)std::floor((double)(geo.y + geo.height) / 2.0),
     };
 }
 
@@ -118,13 +118,13 @@ void ViewGeoEnforcer::update_transformer() {
         return;
     }
 
-    scale_x = (float)geo.width / (float)curr.width;
-    scale_y = (float)geo.height / (float)curr.height;
+    scale_x = (double)geo.width / (double)curr.width;
+    scale_y = (double)geo.height / (double)curr.height;
 
-    translation_x = (float)geo.x - (float)curr.x +
-                    ((float)geo.width - (float)curr.width) / 2.0f;
-    translation_y = (float)geo.y - (float)curr.y +
-                    ((float)geo.height - (float)curr.height) / 2.0f;
+    translation_x = (double)geo.x - (double)curr.x +
+                    ((double)geo.width - (double)curr.width) / 2.0;
+    translation_y = (double)geo.y - (double)curr.y +
+                    ((double)geo.height - (double)curr.height) / 2.0;
 
     view->damage();
 }
@@ -229,8 +229,9 @@ void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
     node->set_floating(false);
     node->set_ws(get_ws());
 
-    float shrink_ratio = (float)children.size() / (float)(children.size() + 1);
-    float total_ratio = 0;
+    double shrink_ratio =
+        (double)children.size() / (double)(children.size() + 1);
+    double total_ratio = 0;
 
     for (auto &c : children) {
         c.ratio *= shrink_ratio;
@@ -239,7 +240,7 @@ void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
 
     SplitChild nchild;
     nchild.node = std::move(node);
-    nchild.ratio = 1.0f - total_ratio;
+    nchild.ratio = 1.0 - total_ratio;
 
     children.insert(at, std::move(nchild));
     refresh_geometry();
@@ -298,14 +299,14 @@ OwnedNode SplitNode::remove_child_at(SplitChildIter child) {
     }
 
     if (!children.empty()) {
-        float grow_ratio =
-            (float)(children.size() + 1) / (float)(children.size());
-        float total_ratio = 0;
+        double grow_ratio =
+            (double)(children.size() + 1) / (double)(children.size());
+        double total_ratio = 0;
         for (auto i = children.begin(); i != children.end() - 1; i++) {
             i->ratio *= grow_ratio;
             total_ratio += i->ratio;
         }
-        children.back().ratio = 1.0f - total_ratio;
+        children.back().ratio = 1.0 - total_ratio;
     }
 
     refresh_geometry();
