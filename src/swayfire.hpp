@@ -22,8 +22,8 @@
 #include <wayfire/view-transform.hpp>
 #include <wayfire/workspace-manager.hpp>
 
-#define FLOATING_MOVE_STEP 5
-#define MIN_VIEW_SIZE 20
+constexpr uint32_t FLOATING_MOVE_STEP = 5;
+constexpr int32_t MIN_VIEW_SIZE = 20;
 
 using OutputRef = nonstd::observer_ptr<wf::output_t>;
 
@@ -47,8 +47,8 @@ wf::dimensions_t min(const wf::dimensions_t &a, const wf::dimensions_t &b);
 /// Apply std::max on both components of the two dimensions independently.
 wf::dimensions_t max(const wf::dimensions_t &a, const wf::dimensions_t &b);
 
-#define NONWF_ALL_EDGES                                                        \
-    (WLR_EDGE_LEFT | WLR_EDGE_RIGHT | WLR_EDGE_TOP | WLR_EDGE_BOTTOM)
+constexpr uint32_t NONWF_ALL_EDGES =
+    (WLR_EDGE_LEFT | WLR_EDGE_RIGHT | WLR_EDGE_TOP | WLR_EDGE_BOTTOM);
 
 } // namespace nonwf
 
