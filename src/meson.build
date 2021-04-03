@@ -9,6 +9,7 @@ all_src += plugin_src
 all_src += files([
     'grab.hpp',
     'swayfire.hpp',
+    'nonstd.hpp',
     'pch/prefix.hpp',
 ])
 

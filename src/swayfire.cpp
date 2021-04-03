@@ -1,5 +1,6 @@
 #include "swayfire.hpp"
 #include "grab.hpp"
+#include "nonstd.hpp"
 
 // nonwf
 
@@ -184,6 +185,9 @@ void ViewNode::set_floating(bool fl) {
 void ViewNode::set_geometry(wf::geometry_t geo) {
     geometry = geo;
 
+    if (safe_set_geo)
+        return;
+
     auto curr_wsid = ws->output->workspace->get_current_workspace();
     if (ws->wsid != curr_wsid)
         geo = nonwf::local_to_relative_geometry(geo, ws->wsid, curr_wsid,
@@ -222,20 +226,62 @@ NodeParent ViewNode::get_or_upgrade_to_parent_node() {
         return parent;
 }
 
+void ViewNode::for_each_leaf(std::function<void(ViewNodeRef)> f) { f(this); }
+
 // SplitNode
+
+void SplitNode::sync_ratios_to_sizes() {
+    uint32_t total_size = 0;
+    for (const auto &c : children)
+        total_size += c.size;
+
+    assert(total_size != 0);
+
+    double total_ratio = 0;
+    for (auto &c : children | nonstd::skip_last) {
+        c.ratio = (double)c.size / (double)total_size;
+        total_ratio += c.ratio;
+    }
+
+    assert(total_ratio < 1.0);
+    assert(total_ratio >= 0.0);
+
+    children.back().ratio = 1.0 - total_ratio;
+}
+
+void SplitNode::sync_sizes_to_ratios() {
+    assert("Cannot sync sizes to ratios when children are stacked." &&
+           is_split());
+
+    const auto total_size = split_type == SplitType::VSPLIT
+                                ? get_geometry().width
+                                : get_geometry().height;
+
+    auto size_left = total_size;
+    for (auto &c : children | nonstd::skip_last) {
+        c.size = (uint32_t)(c.ratio * (double)total_size);
+        size_left -= c.size;
+    }
+
+    children.back().size = size_left;
+}
 
 void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
     node->parent = this;
     node->set_floating(false);
     node->set_ws(get_ws());
 
-    double shrink_ratio =
-        (double)children.size() / (double)(children.size() + 1);
     double total_ratio = 0;
+    if (!children.empty()) {
+        sync_ratios_to_sizes();
 
-    for (auto &c : children) {
-        c.ratio *= shrink_ratio;
-        total_ratio += c.ratio;
+        double shrink_ratio =
+            (double)children.size() / (double)(children.size() + 1);
+
+        for (auto &c : children) {
+            c.ratio *= shrink_ratio;
+            total_ratio += c.ratio;
+        }
     }
 
     SplitChild nchild;
@@ -243,6 +289,10 @@ void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
     nchild.ratio = 1.0 - total_ratio;
 
     children.insert(at, std::move(nchild));
+
+    if (is_split())
+        sync_sizes_to_ratios();
+
     refresh_geometry();
 }
 
@@ -288,6 +338,8 @@ OwnedNode SplitNode::remove_child(Node node) {
 }
 
 OwnedNode SplitNode::remove_child_at(SplitChildIter child) {
+    sync_ratios_to_sizes();
+
     auto owned_node = std::move(child->node);
     children.erase(child);
 
@@ -301,12 +353,16 @@ OwnedNode SplitNode::remove_child_at(SplitChildIter child) {
     if (!children.empty()) {
         double grow_ratio =
             (double)(children.size() + 1) / (double)(children.size());
+
         double total_ratio = 0;
-        for (auto i = children.begin(); i != children.end() - 1; i++) {
-            i->ratio *= grow_ratio;
-            total_ratio += i->ratio;
+        for (auto &c : children | nonstd::skip_last) {
+            c.ratio *= grow_ratio;
+            total_ratio += c.ratio;
         }
         children.back().ratio = 1.0 - total_ratio;
+
+        if (is_split())
+            sync_sizes_to_ratios();
     }
 
     refresh_geometry();
@@ -365,6 +421,11 @@ Node SplitNode::try_downgrade() {
 }
 
 NodeParent SplitNode::get_or_upgrade_to_parent_node() { return this; }
+
+void SplitNode::for_each_leaf(std::function<void(ViewNodeRef)> f) {
+    for (auto &c : children)
+        c.node->for_each_leaf(f);
+}
 
 OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
     auto child = find_child(node);
@@ -596,37 +657,56 @@ void SplitNode::set_ws(WorkspaceRef ws) {
 }
 
 void SplitNode::set_geometry(wf::geometry_t geo) {
-    switch (split_type) {
-// distribute over dim1 and pos1
-#define DISTRIBUTE(dim1, dim2, pos1, pos2)                                     \
-    {                                                                          \
-        auto total = 0;                                                        \
-        unsigned int i = 0;                                                    \
-        for (auto &child : children) {                                         \
-            auto subgeo = child.node->get_geometry();                          \
-                                                                               \
-            subgeo.pos1 = geo.pos1 + total;                                    \
-            subgeo.pos2 = geo.pos2;                                            \
-                                                                               \
-            if (i == children.size() - 1) {                                    \
-                subgeo.dim1 = geo.dim1 - total;                                \
-            } else {                                                           \
-                subgeo.dim1 = geo.dim1 * child.ratio;                          \
-                total += subgeo.dim1;                                          \
-            }                                                                  \
-            subgeo.dim2 = geo.dim2;                                            \
-                                                                               \
-            child.node->set_geometry(subgeo);                                  \
-            i++;                                                               \
-        }                                                                      \
+    geometry = geo;
+
+    if (children.empty()) {
+        LOGE(this, ": Attempt to set geometry of empty split node.");
+        return;
     }
+
+    if (safe_set_geo)
+        return;
+
+    switch (split_type) {
     case SplitType::VSPLIT:
-        DISTRIBUTE(width, height, x, y);
+    case SplitType::HSPLIT: {
+        const uint32_t size =
+            split_type == SplitType::VSPLIT ? geo.width : geo.height;
+
+        {
+            uint32_t total_children_size = 0;
+            for (auto &c : children)
+                total_children_size += c.size;
+
+            // Fix improper total child size by resyncing with ratios.
+            if (total_children_size != size)
+                sync_sizes_to_ratios();
+        }
+
+        int offset = 0;
+        for (auto &c : children) {
+            if (split_type == SplitType::VSPLIT)
+                c.node->set_geometry({
+                    geo.x + offset,
+                    geo.y,
+                    (int)c.size,
+                    geo.height,
+                });
+            else
+                c.node->set_geometry({
+                    geo.x,
+                    geo.y + offset,
+                    geo.width,
+                    (int)c.size,
+                });
+            offset += c.size;
+        }
+
+        assert("Children sizes should add up to total size." &&
+               (uint32_t)offset == size);
+
         break;
-    case SplitType::HSPLIT:
-        DISTRIBUTE(height, width, y, x);
-        break;
-#undef DISTRIBUTE
+    }
     case SplitType::TABBED: {
         for (auto &child : children)
             child.node->set_geometry(geo);
@@ -638,7 +718,6 @@ void SplitNode::set_geometry(wf::geometry_t geo) {
         break;
     }
     }
-    geometry = geo;
 }
 
 // Workspace

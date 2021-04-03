@@ -3,6 +3,7 @@
 
 #include <bits/stdint-intn.h>
 #include <bits/stdint-uintn.h>
+#include <cassert>
 #include <memory>
 #include <optional>
 #include <sys/types.h>
@@ -202,6 +203,9 @@ class INode : public virtual IDisplay {
     wf::geometry_t geometry;   ///< The outer geometry of this node.
     uint node_id;              ///< The id of this node.
 
+    uint32_t safe_set_geo = 0; ///< If non-zero, disables side-effects of
+                               ///< set_geometry().
+
     INode() : node_id(id_counter) { id_counter++; }
 
   public:
@@ -234,6 +238,15 @@ class INode : public virtual IDisplay {
     /// This is mainly to cause a recalculation of children geometries.
     void refresh_geometry() { set_geometry(get_geometry()); }
 
+    /// Enable safe set_geometry() mode which prevents side-effects.
+    void push_safe_set_geo() { safe_set_geo++; }
+
+    /// Disable safe set_geometry() mode which allows side-effects again.
+    void pop_safe_set_geo() {
+        assert(safe_set_geo != 0);
+        safe_set_geo--;
+    }
+
     /// Resize outer geometry to ndims if possible --by moving the given edges.
     ///
     /// The other edges remain in place while the moving edges move to achieve
@@ -246,8 +259,7 @@ class INode : public virtual IDisplay {
 
     /// Begin a continuous resize on this node and its children.
     virtual void begin_resize() {
-        auto geo = get_geometry();
-        preferred_size = {geo.width, geo.height};
+        preferred_size = wf::dimensions(get_geometry());
     };
 
     /// End a continuous resize on this node and its children.
@@ -275,6 +287,10 @@ class INode : public virtual IDisplay {
     /// Return this node if it's floating or traverse the tree upward to find a
     /// floating parent.
     Node find_floating_parent();
+
+    /// Apply the given function over all leaves of this tree including this
+    /// node if it isnt a parent node.
+    virtual void for_each_leaf(std::function<void(ViewNodeRef)> f) = 0;
 };
 
 /// Transformer to force views to their supposed geometries.
@@ -362,6 +378,7 @@ class ViewNode : public INode {
     void set_floating(bool fl) override;
     void set_active() override;
     NodeParent get_or_upgrade_to_parent_node() override;
+    void for_each_leaf(std::function<void(ViewNodeRef)> f) override;
 
     // == IDisplay impl ==
 
@@ -381,7 +398,12 @@ struct ViewData : wf::custom_data_t {
 };
 
 /// A child of a split node.
+///
+/// We try to use the size attribute of the children as much as possible in
+/// order to make window resizes more stable since using ratios in a continuos
+/// resize motion is jumpy as the double gets rounded to pixel amounts.
 struct SplitChild {
+    uint32_t size;  ///< The size of the child.
     double ratio;   ///< The size ratio of child.
     OwnedNode node; ///< A direct child node of the split.
 };
@@ -393,6 +415,14 @@ class SplitNode : public INode, public INodeParent {
   private:
     /// Find a direct child of this parent node.
     SplitChildIter find_child(Node node);
+
+    /// Set the children ratios to represent the ratios of the sizes with
+    /// respect to the total size.
+    void sync_ratios_to_sizes();
+
+    /// Set the children sizes to their ratios * total size where total size is
+    /// the size of the SplitNode itself.
+    void sync_sizes_to_ratios();
 
     /// Move a direct child outside of this parent in the given direction.
     ///
@@ -431,6 +461,18 @@ class SplitNode : public INode, public INodeParent {
     std::vector<SplitChild> children;         ///< The direct children nodes.
 
     SplitNode(wf::geometry_t geo) { geometry = geo; }
+
+    /// Return whether this is a v/h-split.
+    bool is_split() {
+        return split_type == SplitType::VSPLIT ||
+               split_type == SplitType::HSPLIT;
+    };
+
+    /// Return whether this is a stack/tabbed layout.
+    bool is_stack() {
+        return split_type == SplitType::STACKED ||
+               split_type == SplitType::TABBED;
+    };
 
     /// Insert a direct child at the given position in children.
     void insert_child_at(SplitChildIter at, OwnedNode node);
@@ -481,6 +523,7 @@ class SplitNode : public INode, public INodeParent {
     void set_floating(bool fl) override;
     void set_ws(WorkspaceRef ws) override;
     NodeParent get_or_upgrade_to_parent_node() override;
+    void for_each_leaf(std::function<void(ViewNodeRef)> f) override;
 
     // == IDisplay impl ==
 

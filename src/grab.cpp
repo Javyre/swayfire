@@ -98,20 +98,26 @@ uint32_t resize_calc_resizing_edges(wf::geometry_t geo, wf::point_t p) {
 #undef RESIZE_MARGIN
 
 void ActiveResize::pointer_motion(uint32_t x, uint32_t y) {
-    int dw = (int)x - pointer_start.x;
-    int dh = (int)y - pointer_start.y;
+    const int dw = (int)x - pointer_start.x;
+    const int dh = (int)y - pointer_start.y;
 
     if (dw == 0 && dh == 0)
         return;
 
-    int nw = (resizing_edges & WLR_EDGE_LEFT)    ? original_geo.width - dw
-             : (resizing_edges & WLR_EDGE_RIGHT) ? original_geo.width + dw
-                                                 : original_geo.width;
-    int nh = (resizing_edges & WLR_EDGE_TOP)      ? original_geo.height - dh
-             : (resizing_edges & WLR_EDGE_BOTTOM) ? original_geo.height + dh
-                                                  : original_geo.height;
+    const int nw = (resizing_edges & WLR_EDGE_LEFT)    ? original_geo.width - dw
+                   : (resizing_edges & WLR_EDGE_RIGHT) ? original_geo.width + dw
+                                                       : original_geo.width;
+    const int nh = (resizing_edges & WLR_EDGE_TOP) ? original_geo.height - dh
+                   : (resizing_edges & WLR_EDGE_BOTTOM)
+                       ? original_geo.height + dh
+                       : original_geo.height;
 
+    // Only actually apply view geometries once the whole tree's geometries have
+    // been updates.
+    root_node->for_each_leaf([](auto n) { n->push_safe_set_geo(); });
     dragged->try_resize({nw, nh}, resizing_edges);
+    root_node->for_each_leaf([](auto n) { n->pop_safe_set_geo(); });
+    root_node->refresh_geometry();
 }
 
 std::unique_ptr<IActiveGrab>

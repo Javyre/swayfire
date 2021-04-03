@@ -1,4 +1,6 @@
+#include "nonstd.hpp"
 #include "swayfire.hpp"
+
 // INode
 
 wf::dimensions_t INode::try_resize(wf::dimensions_t ndims, uint32_t edges) {
@@ -34,112 +36,105 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
     }
     }
 
-    int32_t size, pref_size;
-    auto geo = get_geometry();
-    if (split_type == SplitType::VSPLIT)
-        size = geo.width;
-    else
-        size = geo.height;
+    // Wether we are moving an outer edge.
+    const bool outer_edge = ((front && child == children.begin()) ||
+                             (!front && child == children.end() - 1));
 
-    if (use_prefered_sizes) {
-        if (split_type == SplitType::VSPLIT)
-            pref_size = preferred_size.value().width;
-        else
-            pref_size = preferred_size.value().height;
-    }
+    if (outer_edge) {
+        const auto geo = get_geometry();
+        const int32_t size =
+            (split_type == SplitType::VSPLIT) ? geo.width : geo.height;
 
-    if (front && child == children.begin()) {
-        int32_t delta_size = -delta;
-        if (use_prefered_sizes)
-            delta_size = std::max(size + delta_size, pref_size) - size;
-
-        int32_t new_size =
-            split_type == SplitType::VSPLIT
-                ? parent
-                      ->try_resize_child(this, {size + delta_size, geo.height},
-                                         WLR_EDGE_LEFT)
-                      .width
-                : parent
-                      ->try_resize_child(this, {geo.width, size + delta_size},
-                                         WLR_EDGE_TOP)
-                      .height;
-
-        double scale = (double)size / (double)new_size;
-
-        double total_ratio = 0;
-        child++;
-        for (; child != children.end(); child++) {
-            child->ratio *= scale;
-            total_ratio += child->ratio;
-        }
-        children.front().ratio = 1.0 - total_ratio;
-
-        return -(new_size - size);
-    } else if (!front && child == children.end() - 1) {
-        int32_t delta_size = delta;
-        if (use_prefered_sizes)
-            delta_size = std::max(size + delta_size, pref_size) - size;
-
-        int32_t new_size =
-            split_type == SplitType::VSPLIT
-                ? parent
-                      ->try_resize_child(this, {size + delta_size, geo.height},
-                                         WLR_EDGE_RIGHT)
-                      .width
-                : parent
-                      ->try_resize_child(this, {geo.width, size + delta_size},
-                                         WLR_EDGE_BOTTOM)
-                      .height;
-
-        double scale = (double)size / (double)new_size;
-
-        double total_ratio = 0;
-        auto rchild = std::reverse_iterator(child + 1);
-        rchild++;
-        for (; rchild != children.rend(); rchild++) {
-            rchild->ratio *= scale;
-            total_ratio += rchild->ratio;
-        }
-        children.back().ratio = 1.0 - total_ratio;
-
-        return new_size - size;
-    } else {
-        auto other = front ? child - 1 : child + 1;
-
-        int32_t total_size = size;
-        int32_t child_size, other_size;
-        if (split_type == SplitType::VSPLIT) {
-            child_size = child->node->get_geometry().width;
-            other_size = other->node->get_geometry().width;
-        } else {
-            child_size = child->node->get_geometry().height;
-            other_size = other->node->get_geometry().height;
-        }
-
-        int32_t max_nother_size = other_size + child_size - MIN_VIEW_SIZE;
+        int32_t delta_size = delta * (front ? -1 : 1);
 
         if (use_prefered_sizes) {
-            auto pref = split_type == SplitType::VSPLIT
-                            ? other->node->preferred_size.value().width
-                            : other->node->preferred_size.value().height;
-            max_nother_size = std::min(max_nother_size, (int32_t)(pref));
+            const int32_t pref_size = (split_type == SplitType::VSPLIT)
+                                          ? preferred_size.value().width
+                                          : preferred_size.value().height;
+
+            delta_size = std::max(size + delta_size, pref_size) - size;
         }
 
-        int32_t nother_size =
-            std::clamp(front ? other_size + delta : other_size - delta,
-                       MIN_VIEW_SIZE, max_nother_size);
+        delta_size = std::max(size + delta_size,
+                              (int32_t)children.size() * MIN_VIEW_SIZE) -
+                     size;
 
-        double nother_ratio = (double)nother_size / (double)total_size;
+        if (delta_size == 0)
+            return 0;
 
-        child->ratio += other->ratio - nother_ratio;
-        other->ratio = nother_ratio;
+        push_safe_set_geo();
+        const auto dims =
+            (split_type == SplitType::VSPLIT)
+                ? wf::dimensions_t({size + delta_size, geo.height})
+                : wf::dimensions_t({geo.width, size + delta_size});
+
+        const auto edge = (split_type == SplitType::VSPLIT)
+                              ? (front ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT)
+                              : (front ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM);
+
+        const int32_t new_size =
+            split_type == SplitType::VSPLIT
+                ? parent->try_resize_child(this, dims, edge).width
+                : parent->try_resize_child(this, dims, edge).height;
+        pop_safe_set_geo();
+
+        delta_size = new_size - size;
+
+        {
+            const auto distribute_delta_size = [&](auto &c) {
+                if (delta_size == 0)
+                    return true;
+
+                int32_t old_csize = c.size;
+                c.size =
+                    (uint32_t)std::max(MIN_VIEW_SIZE, old_csize + delta_size);
+                delta_size -= c.size - old_csize;
+                return false;
+            };
+
+            if (front) {
+                for (auto &c : children)
+                    if (distribute_delta_size(c))
+                        break;
+            } else {
+                for (auto &c : children | nonstd::reverse)
+                    if (distribute_delta_size(c))
+                        break;
+            }
+        }
 
         refresh_geometry();
 
-        int32_t amount_moved =
-            front ? nother_size - other_size : other_size - nother_size;
+        return delta_size * (front ? -1 : 1);
+    } else {
+        int32_t delta_child_size = delta * (front ? -1 : 1);
 
-        return amount_moved;
+        const auto other = child + (front ? -1 : 1);
+        const int32_t child_size = child->size;
+        const int32_t other_size = other->size;
+
+        if (use_prefered_sizes) {
+            const int32_t pref =
+                split_type == SplitType::VSPLIT
+                    ? other->node->preferred_size.value().width
+                    : other->node->preferred_size.value().height;
+
+            delta_child_size =
+                other_size - std::min(other_size - delta_child_size, pref);
+        }
+
+        delta_child_size =
+            other_size - std::max(other_size - delta_child_size, MIN_VIEW_SIZE);
+
+        delta_child_size =
+            std::max(child_size + delta_child_size, MIN_VIEW_SIZE) - child_size;
+
+        child->size += delta_child_size;
+        other->size -= delta_child_size;
+
+        refresh_geometry();
+
+        return delta_child_size * (front ? -1 : 1);
     }
 }
 
@@ -152,7 +147,7 @@ wf::dimensions_t SplitNode::try_resize_child(Node node, wf::dimensions_t ndims,
     // Reverse iterator starting at child.
     auto rchild = std::reverse_iterator(child + 1);
 
-    auto child_geo = child->node->get_geometry();
+    const auto child_geo = child->node->get_geometry();
 
     ndims = nonwf::max(ndims, {MIN_VIEW_SIZE, MIN_VIEW_SIZE});
 
@@ -172,11 +167,16 @@ wf::dimensions_t SplitNode::try_resize_child(Node node, wf::dimensions_t ndims,
     switch (split_type) {
     case SplitType::VSPLIT:
     case SplitType::HSPLIT: {
+        push_safe_set_geo();
+
         auto delta_size =
             split_type == SplitType::VSPLIT ? delta.width : delta.height;
 
-        if ((split_type == SplitType::VSPLIT && (edges & WLR_EDGE_LEFT)) ||
-            (split_type == SplitType::HSPLIT && (edges & WLR_EDGE_TOP))) {
+        const bool front_edge =
+            (split_type == SplitType::VSPLIT && (edges & WLR_EDGE_LEFT)) ||
+            (split_type == SplitType::HSPLIT && (edges & WLR_EDGE_TOP));
+
+        if (front_edge) {
             // Shrinking child from left means moving left edge(s) towards +x.
             auto edge_delta = delta_size * -1;
             if (delta_size > 0) {
@@ -215,13 +215,20 @@ wf::dimensions_t SplitNode::try_resize_child(Node node, wf::dimensions_t ndims,
             delta_size = edge_delta;
         }
 
-        wf::dimensions_t nndims = wf::dimensions(get_geometry());
-        if (split_type == SplitType::VSPLIT)
-            nndims.height += delta.height;
-        else
-            nndims.width += delta.width;
+        auto other_dim =
+            (split_type == SplitType::VSPLIT) ? delta.height : delta.width;
+        if (other_dim != 0) {
+            wf::dimensions_t nndims = wf::dimensions(get_geometry());
+            if (split_type == SplitType::VSPLIT)
+                nndims.height += delta.height;
+            else
+                nndims.width += delta.width;
 
-        parent->try_resize_child(this, nndims, edges);
+            parent->try_resize_child(this, nndims, edges);
+        }
+
+        pop_safe_set_geo();
+        refresh_geometry();
 
         return wf::dimensions(node->get_geometry());
     }
@@ -262,16 +269,22 @@ wf::dimensions_t Workspace::try_resize_child(Node child, wf::dimensions_t ndims,
         child->set_geometry(ngeo);
         return wf::dimensions(ngeo);
     }
-    return ndims;
+    return wf::dimensions(child->get_geometry());
 }
 void SplitNode::begin_resize() {
     INode::begin_resize();
+
+    sync_sizes_to_ratios();
+
     for (auto &child : children)
         child.node->begin_resize();
 }
 
 void SplitNode::end_resize() {
     INode::end_resize();
+
+    sync_ratios_to_sizes();
+
     for (auto &child : children)
         child.node->end_resize();
 }
