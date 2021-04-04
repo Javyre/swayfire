@@ -1,8 +1,7 @@
 #ifndef GRAB_HPP
 #define GRAB_HPP
 
-#include <bits/stdint-uintn.h>
-#include <swayfire.hpp>
+#include "swayfire.hpp"
 
 /// RAII gesture controller interface.
 class IActiveGrab {

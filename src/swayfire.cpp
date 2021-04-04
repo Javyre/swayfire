@@ -142,13 +142,13 @@ ViewNode::ViewNode(wayfire_view view) : view(view) {
 
     view->connect_signal("mapped", &on_mapped);
     view->connect_signal("unmapped", &on_unmapped);
-    view->get_output()->connect_signal("view-focused", &on_focused);
+    view->connect_signal("geometry-changed", &on_geometry_changed);
 }
 
 ViewNode::~ViewNode() {
     LOGD("Destroying ", this);
 
-    view->get_output()->disconnect_signal(&on_focused);
+    view->disconnect_signal(&on_geometry_changed);
     view->disconnect_signal(&on_unmapped);
     view->disconnect_signal(&on_mapped);
 
@@ -169,6 +169,15 @@ void ViewNode::on_unmapped_impl() {
     ws->node_removed(this);
 
     // view node dies here.
+}
+
+void ViewNode::on_geometry_changed_impl() {
+    auto curr_wsid = get_ws()->output->workspace->get_current_workspace();
+    auto ngeo = nonwf::local_to_relative_geometry(
+        view->get_wm_geometry(), curr_wsid, get_ws()->wsid, get_ws()->output);
+
+    if (ngeo != get_geometry())
+        set_geometry(ngeo);
 }
 
 void ViewNode::set_floating(bool fl) {
@@ -216,7 +225,7 @@ void ViewNode::set_active() {
     INode::set_active();
 
     if (!view->activated)
-        view->focus_request();
+        get_ws()->output->focus_view(view, true);
 }
 
 NodeParent ViewNode::get_or_upgrade_to_parent_node() {
@@ -1082,11 +1091,13 @@ std::unique_ptr<ViewNode> Swayfire::init_view_node(wayfire_view view) {
 }
 
 void Swayfire::bind_signals() {
+    output->connect_signal("view-focused", &on_view_focused);
     output->connect_signal("view-layer-attached", &on_view_attached);
 }
 
 void Swayfire::unbind_signals() {
     output->disconnect_signal(&on_view_attached);
+    output->disconnect_signal(&on_view_focused);
 }
 
 void Swayfire::init() {

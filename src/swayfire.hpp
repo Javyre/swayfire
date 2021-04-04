@@ -331,21 +331,22 @@ class ViewNode : public INode {
             floating_geometry = view->get_wm_geometry();
     };
 
-    /// Handle the view being focused.
-    wf::signal_connection_t on_focused = [&](wf::signal_data_t *data) {
-        // The focused event is not directly available on views.
-        if (view.get() == wf::get_signaled_view(data).get())
-            set_active();
-    };
-
     /// Handle unmapped views.
     wf::signal_connection_t on_unmapped = [&](wf::signal_data_t *) {
         // can't inline it here since depends on ws methods.
         on_unmapped_impl();
     };
 
+    /// Handle geometry changes.
+    wf::signal_connection_t on_geometry_changed = [&](wf::signal_data_t *) {
+        on_geometry_changed_impl();
+    };
+
     /// Destroys the view node and the custom data attached to the view.
     void on_unmapped_impl();
+
+    /// Handle geometry changes.
+    void on_geometry_changed_impl();
 
   public:
     /// The wayfire view corresponding to this node.
@@ -603,6 +604,9 @@ class Workspace : public INodeParent {
     void insert_floating_node(OwnedNode node);
 
     /// Remove a floating node from this workspace.
+    ///
+    /// If you are really removing the node from this workspace, call
+    /// node_removed() after this.
     OwnedNode remove_floating_node(Node node);
 
     /// Swap a floating node in this workspace for another node.
@@ -617,6 +621,9 @@ class Workspace : public INodeParent {
     void insert_tiled_node(OwnedNode node);
 
     /// Remove a tiled node from this ws.
+    ///
+    /// If you are really removing the node from this workspace, call
+    /// node_removed() after this.
     OwnedNode remove_tiled_node(Node node);
 
     /// Swap the root tiled split node with another.
@@ -628,9 +635,16 @@ class Workspace : public INodeParent {
     // == Both ==
 
     /// Remove a node from this ws.
+    ///
+    /// If you are really removing the node from this workspace, call
+    /// node_removed() after this.
     OwnedNode remove_node(Node node);
 
     /// Clean up after a node has been removed from this ws.
+    ///
+    /// A lot of the time remove_node() is called as an intermediary step where
+    /// the node will be moved back into the workspace in the same action. This
+    /// method is for after one really removes a node from this workspace.
     void node_removed(Node node);
 
     /// Toggle tiling on a ndoe in this ws.
@@ -780,6 +794,38 @@ class Swayfire : public wf::plugin_interface_t {
     wf::button_callback on_resize_activate;
 
     // == Signal Handlers == //
+
+    /// Handle views being focused.
+    wf::signal_connection_t on_view_focused = [&](wf::signal_data_t *data) {
+        const auto view = wf::get_signaled_view(data);
+
+        if (const auto vdata = view->get_data<ViewData>()) {
+            const auto node = vdata->node;
+
+            if (node->get_ws()->wsid !=
+                output->workspace->get_current_workspace()) {
+                if (auto floating = node->find_floating_parent()) {
+                    auto from_ws = node->get_ws();
+                    auto to_ws = get_current_workspace();
+
+                    to_ws->insert_floating_node(
+                        from_ws->remove_floating_node(floating));
+                    from_ws->node_removed(floating);
+
+                    floating->set_geometry(nonwf::local_to_relative_geometry(
+                        floating->get_geometry(), from_ws->wsid, to_ws->wsid,
+                        output));
+                } else {
+                    LOGE("Attempt to focus ", node,
+                         " from outsite its "
+                         "workspace!");
+                    return;
+                }
+            }
+
+            node->set_active();
+        }
+    };
 
     /// Handle new created views.
     wf::signal_connection_t on_view_attached = [&](wf::signal_data_t *data) {
