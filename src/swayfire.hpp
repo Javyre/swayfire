@@ -348,6 +348,12 @@ class ViewNode : public INode {
     /// Handle geometry changes.
     void on_geometry_changed_impl();
 
+    /// Temporarily disable handling geometry-changed events.
+    ///
+    /// We temporarily disable handling the geo change event to not react to our
+    /// own set_geometry_calls.
+    bool enable_on_geometry_changed = true;
+
   public:
     /// The wayfire view corresponding to this node.
     wayfire_view view;

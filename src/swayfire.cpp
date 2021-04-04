@@ -115,19 +115,16 @@ void ViewGeoEnforcer::update_transformer() {
         scale_y = 1;
         translation_x = 0;
         translation_y = 0;
-        view->damage();
         return;
     }
 
-    scale_x = (double)geo.width / (double)curr.width;
-    scale_y = (double)geo.height / (double)curr.height;
+    scale_x = (float)geo.width / (float)curr.width;
+    scale_y = (float)geo.height / (float)curr.height;
 
-    translation_x = (double)geo.x - (double)curr.x +
-                    ((double)geo.width - (double)curr.width) / 2.0;
-    translation_y = (double)geo.y - (double)curr.y +
-                    ((double)geo.height - (double)curr.height) / 2.0;
-
-    view->damage();
+    translation_x = (float)geo.x - (float)curr.x +
+                    ((float)geo.width - (float)curr.width) / 2.0f;
+    translation_y = (float)geo.y - (float)curr.y +
+                    ((float)geo.height - (float)curr.height) / 2.0f;
 }
 
 // ViewNode
@@ -172,12 +169,14 @@ void ViewNode::on_unmapped_impl() {
 }
 
 void ViewNode::on_geometry_changed_impl() {
-    auto curr_wsid = get_ws()->output->workspace->get_current_workspace();
-    auto ngeo = nonwf::local_to_relative_geometry(
-        view->get_wm_geometry(), curr_wsid, get_ws()->wsid, get_ws()->output);
-
-    if (ngeo != get_geometry())
+    if (enable_on_geometry_changed) {
+        const auto curr_wsid =
+            get_ws()->output->workspace->get_current_workspace();
+        const auto ngeo = nonwf::local_to_relative_geometry(
+            view->get_wm_geometry(), curr_wsid, get_ws()->wsid,
+            get_ws()->output);
         set_geometry(ngeo);
+    }
 }
 
 void ViewNode::set_floating(bool fl) {
@@ -202,7 +201,10 @@ void ViewNode::set_geometry(wf::geometry_t geo) {
         geo = nonwf::local_to_relative_geometry(geo, ws->wsid, curr_wsid,
                                                 ws->output);
 
+    enable_on_geometry_changed = false;
     view->set_geometry(geo);
+    enable_on_geometry_changed = true;
+
     geo_enforcer->update_transformer();
 }
 
