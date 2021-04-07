@@ -106,7 +106,10 @@ bool Swayfire::on_move_up(wf::keybinding_t) {
 
 bool Swayfire::on_toggle_tile(wf::keybinding_t) {
     auto ws = get_current_workspace();
-    ws->toggle_tile_node(ws->get_active_node());
+    auto const node = ws->get_active_node();
+
+    // If we're floating, we want to tile.
+    node->tile_request(node->get_floating());
     return true;
 }
 

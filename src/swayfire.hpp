@@ -31,7 +31,8 @@ using OutputRef = nonstd::observer_ptr<wf::output_t>;
 /// Small wayfire helpers.
 namespace nonwf {
 
-wf::point_t get_view_workspace(wayfire_view view, OutputRef output);
+/// Get the wsid of the workspace on which most of the view is visible.
+wf::point_t get_view_workspace(wayfire_view view, bool with_transform = false);
 
 /// Convert geo from from_wsid to to_wsid coordinate space.
 wf::geometry_t local_to_relative_geometry(wf::geometry_t geo,
@@ -48,7 +49,7 @@ wf::dimensions_t min(const wf::dimensions_t &a, const wf::dimensions_t &b);
 /// Apply std::max on both components of the two dimensions independently.
 wf::dimensions_t max(const wf::dimensions_t &a, const wf::dimensions_t &b);
 
-constexpr uint32_t NONWF_ALL_EDGES =
+constexpr uint32_t ALL_EDGES =
     (WLR_EDGE_LEFT | WLR_EDGE_RIGHT | WLR_EDGE_TOP | WLR_EDGE_BOTTOM);
 
 } // namespace nonwf
@@ -241,7 +242,8 @@ class INode : public virtual IDisplay {
     /// Enable safe set_geometry() mode which prevents side-effects.
     void push_safe_set_geo() { safe_set_geo++; }
 
-    /// Disable safe set_geometry() mode which allows side-effects again.
+    /// Restore to previous safe set_geometry() mode to maybe allow side-effects
+    /// again.
     void pop_safe_set_geo() {
         assert(safe_set_geo != 0);
         safe_set_geo--;
@@ -279,6 +281,9 @@ class INode : public virtual IDisplay {
 
     /// Make this node the active selected node in its workspace.
     virtual void set_active();
+
+    /// Try to (un)tile this node in its workspace.
+    void tile_request(bool tile);
 
     /// Return self if this node is a parent or try to upgrade this node to
     /// become a parent or return the parent of this node.
@@ -348,11 +353,20 @@ class ViewNode : public INode {
     /// Handle geometry changes.
     void on_geometry_changed_impl();
 
-    /// Temporarily disable handling geometry-changed events.
+    /// Temporarily disable handling geometry-changed events if non-zero.
     ///
     /// We temporarily disable handling the geo change event to not react to our
     /// own set_geometry_calls.
-    bool enable_on_geometry_changed = true;
+    uint32_t disable_on_geometry_changed = 0;
+
+    /// Disable reacting to view geometry_changed events.
+    void push_disable_on_geometry_changed() { disable_on_geometry_changed++; }
+
+    /// Restore to previous value of disable_on_geometry_changed.
+    void pop_disable_on_geometry_changed() {
+        assert(disable_on_geometry_changed != 0);
+        disable_on_geometry_changed--;
+    }
 
   public:
     /// The wayfire view corresponding to this node.
@@ -560,6 +574,9 @@ class Workspace : public INodeParent {
     /// All floating nodes are direct children of their workspace.
     std::vector<OwnedNode> floating_nodes;
 
+    /// The Swayfire plugin that owns this workspace.
+    nonstd::observer_ptr<Swayfire> plugin;
+
     /// The wayfire output that this workspace is on.
     OutputRef output;
 
@@ -583,7 +600,8 @@ class Workspace : public INodeParent {
     };
 
   public:
-    Workspace(wf::point_t wsid, wf::geometry_t geo, OutputRef output);
+    Workspace(wf::point_t wsid, wf::geometry_t geo,
+              nonstd::observer_ptr<Swayfire> swayfire);
 
     Workspace(const Workspace &) = delete;
     Workspace const &operator=(const Workspace &) = delete;
@@ -653,8 +671,8 @@ class Workspace : public INodeParent {
     /// method is for after one really removes a node from this workspace.
     void node_removed(Node node);
 
-    /// Toggle tiling on a ndoe in this ws.
-    void toggle_tile_node(Node node);
+    /// Try to (un)tile a node in this workspace.
+    void tile_request(Node node, bool tile);
 
     // == INodeParent impl ==
 
@@ -683,7 +701,7 @@ struct Workspaces {
 
     /// Update the dimensions of the workspace grid.
     void update_dims(wf::dimensions_t ndims, wf::geometry_t geo,
-                     OutputRef output);
+                     nonstd::observer_ptr<Swayfire> plugin);
 
     /// Get the workspace at the given coordinate in the grid.
     WorkspaceRef get(wf::point_t ws);
@@ -821,15 +839,26 @@ class Swayfire : public wf::plugin_interface_t {
                     floating->set_geometry(nonwf::local_to_relative_geometry(
                         floating->get_geometry(), from_ws->wsid, to_ws->wsid,
                         output));
-                } else {
-                    LOGE("Attempt to focus ", node,
-                         " from outsite its "
-                         "workspace!");
-                    return;
                 }
             }
 
             node->set_active();
+        }
+    };
+
+    /// Handle view tile requests
+    wf::signal_connection_t on_view_tile_request = [&](wf::signal_data_t
+                                                           *data) {
+        auto tr_data = static_cast<wf::view_tile_request_signal *>(data);
+
+        if (const auto vdata = tr_data->view->get_data<ViewData>()) {
+            const auto node = vdata->node;
+            assert(!tr_data->carried_out);
+            tr_data->carried_out = true;
+            // Following the example of wayfire's simple_tile, we ignore tile
+            // requests from wayfire since we manually handle what views tile
+            // when.
+            return;
         }
     };
 
@@ -840,7 +869,7 @@ class Swayfire : public wf::plugin_interface_t {
         if (view->role != wf::VIEW_ROLE_TOPLEVEL)
             return;
 
-        auto ws = workspaces.get(nonwf::get_view_workspace(view, output));
+        auto ws = workspaces.get(nonwf::get_view_workspace(view));
 
         LOGD("attaching node in ", ws, ", ", view->to_string(), " : ",
              view->get_title());
@@ -850,6 +879,8 @@ class Swayfire : public wf::plugin_interface_t {
 
   public:
     WorkspaceRef get_current_workspace();
+    WorkspaceRef get_view_workspace(wayfire_view view,
+                                    bool with_transform = false);
 
     // == Impl wf::plugin_interface_t ==
 

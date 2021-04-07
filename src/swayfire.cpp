@@ -5,15 +5,18 @@
 // nonwf
 
 // TODO: use wf::get_view_main_workspace once we upgrade to wayfire > 0.7
-wf::point_t nonwf::get_view_workspace(wayfire_view view, OutputRef output) {
-    auto og = output->get_screen_size();
+wf::point_t nonwf::get_view_workspace(wayfire_view view, bool with_transform) {
+    const auto output = view->get_output();
+    const auto og = output->get_screen_size();
 
-    auto wm = view->transform_region(view->get_wm_geometry());
+    const auto wm = with_transform
+                        ? view->transform_region(view->get_wm_geometry())
+                        : view->get_wm_geometry();
     auto x = (int)std::floor((wm.x + wm.width / 2.0) / og.width);
     auto y = (int)std::floor((wm.y + wm.height / 2.0) / og.height);
 
-    auto dims = output->workspace->get_workspace_grid_size();
-    auto curr = output->workspace->get_current_workspace();
+    const auto dims = output->workspace->get_workspace_grid_size();
+    const auto curr = output->workspace->get_current_workspace();
 
     // convert relative coords to nearest absolute wsid coords
     x = std::clamp(x + curr.x, 0, dims.width - 1);
@@ -75,6 +78,10 @@ void INode::set_active() {
     ws->set_active_node(this);
 }
 
+void INode::tile_request(const bool tile) {
+    get_ws()->tile_request(this, tile);
+}
+
 Node INode::find_floating_parent() {
     if (get_floating())
         return this;
@@ -115,6 +122,10 @@ void ViewGeoEnforcer::update_transformer() {
         scale_y = 1;
         translation_x = 0;
         translation_y = 0;
+
+        view_node->push_disable_on_geometry_changed();
+        view->damage();
+        view_node->pop_disable_on_geometry_changed();
         return;
     }
 
@@ -125,6 +136,10 @@ void ViewGeoEnforcer::update_transformer() {
                     ((float)geo.width - (float)curr.width) / 2.0f;
     translation_y = (float)geo.y - (float)curr.y +
                     ((float)geo.height - (float)curr.height) / 2.0f;
+
+    view_node->push_disable_on_geometry_changed();
+    view->damage();
+    view_node->pop_disable_on_geometry_changed();
 }
 
 // ViewNode
@@ -169,13 +184,28 @@ void ViewNode::on_unmapped_impl() {
 }
 
 void ViewNode::on_geometry_changed_impl() {
-    if (enable_on_geometry_changed) {
-        const auto curr_wsid =
-            get_ws()->output->workspace->get_current_workspace();
-        const auto ngeo = nonwf::local_to_relative_geometry(
-            view->get_wm_geometry(), curr_wsid, get_ws()->wsid,
-            get_ws()->output);
-        set_geometry(ngeo);
+    if (disable_on_geometry_changed == 0) {
+        if (get_floating()) {
+            const auto curr_wsid =
+                get_ws()->output->workspace->get_current_workspace();
+            const auto ngeo = nonwf::local_to_relative_geometry(
+                view->get_wm_geometry(), curr_wsid, get_ws()->wsid,
+                get_ws()->output);
+            set_geometry(ngeo);
+        } else {
+            const auto new_ws =
+                get_ws()->plugin->get_view_workspace(view, false);
+
+            if (new_ws->wsid == get_ws()->wsid)
+                return;
+
+            LOGD(this, ": moving from ", get_ws(), " to ", new_ws);
+
+            auto const old_ws = get_ws();
+            auto owned_self = old_ws->remove_tiled_node(this);
+            old_ws->node_removed(this);
+            new_ws->insert_tiled_node(std::move(owned_self));
+        }
     }
 }
 
@@ -201,9 +231,9 @@ void ViewNode::set_geometry(wf::geometry_t geo) {
         geo = nonwf::local_to_relative_geometry(geo, ws->wsid, curr_wsid,
                                                 ws->output);
 
-    enable_on_geometry_changed = false;
+    push_disable_on_geometry_changed();
     view->set_geometry(geo);
-    enable_on_geometry_changed = true;
+    pop_disable_on_geometry_changed();
 
     geo_enforcer->update_transformer();
 }
@@ -599,8 +629,8 @@ bool SplitNode::move_child(Node node, Direction dir) {
                     return true;                                               \
                 }                                                              \
             }                                                                  \
-            insert_child_front_of(child[-1].node.get(),                        \
-                                  remove_child_at(child));                     \
+            auto const prev = child[-1].node.get();                            \
+            insert_child_front_of(prev, remove_child_at(child));               \
             return true;                                                       \
         }                                                                      \
     }
@@ -619,7 +649,8 @@ bool SplitNode::move_child(Node node, Direction dir) {
                     return true;                                               \
                 }                                                              \
             }                                                                  \
-            insert_child_back_of(child[1].node.get(), remove_child_at(child)); \
+            auto const next = child[1].node.get();                             \
+            insert_child_back_of(next, remove_child_at(child));                \
             return true;                                                       \
         }                                                                      \
     }
@@ -671,7 +702,8 @@ void SplitNode::set_geometry(wf::geometry_t geo) {
     geometry = geo;
 
     if (children.empty()) {
-        LOGE(this, ": Attempt to set geometry of empty split node.");
+        if (parent->as_split_node() != nullptr)
+            LOGE(this, ": Attempt to set geometry of empty split node.");
         return;
     }
 
@@ -733,8 +765,10 @@ void SplitNode::set_geometry(wf::geometry_t geo) {
 
 // Workspace
 
-Workspace::Workspace(wf::point_t wsid, wf::geometry_t geo, OutputRef output)
-    : workarea(geo), wsid(wsid), output(output) {
+Workspace::Workspace(wf::point_t wsid, wf::geometry_t geo,
+                     nonstd::observer_ptr<Swayfire> plugin)
+    : workarea(geo), wsid(wsid), plugin(plugin), output(plugin->output) {
+
     (void)swap_tiled_root(std::make_unique<SplitNode>(geo));
     LOGD("ws created with root ", tiled_root->to_string());
     active_node = tiled_root;
@@ -839,8 +873,11 @@ OwnedNode Workspace::remove_tiled_node(Node node) {
     auto old_parent = node->parent;
     auto owned_node = node->parent->remove_child(node);
 
-    if (active_tiled_node.get() == node.get())
+    if (active_tiled_node.get() == node.get()) {
         active_tiled_node = old_parent->get_last_active_node();
+        if (!active_tiled_node)
+            active_tiled_node = tiled_root.get();
+    }
 
     return owned_node;
 }
@@ -947,14 +984,15 @@ void Workspace::set_workarea(wf::geometry_t geo) {
     }
 }
 
-void Workspace::toggle_tile_node(Node node) {
-    LOGD("toggling tiling for ", node);
-
-    if (node->get_floating()) {
+void Workspace::tile_request(Node const node, const bool tile) {
+    if (node->get_floating() && tile) {
         insert_tiled_node(remove_floating_node(node));
         if (active_node.get() == node.get())
             active_tiled_node = node.get();
-    } else {
+        return;
+    }
+
+    if (!node->get_floating() && !tile) {
         insert_floating_node(remove_tiled_node(node));
         if (active_node.get() == node.get())
             active_floating =
@@ -1046,7 +1084,7 @@ bool Workspace::move_child(Node node, Direction dir) {
 // Workspaces
 
 void Workspaces::update_dims(wf::dimensions_t ndims, wf::geometry_t geo,
-                             OutputRef output) {
+                             nonstd::observer_ptr<Swayfire> plugin) {
 
     workspaces.resize(ndims.width);
 
@@ -1058,7 +1096,7 @@ void Workspaces::update_dims(wf::dimensions_t ndims, wf::geometry_t geo,
             col.reserve(ndims.height);
             for (int32_t y = col.size(); y < ndims.height; y++) {
                 col.push_back(std::unique_ptr<Workspace>(
-                    new Workspace({x, y}, geo, output)));
+                    new Workspace({x, y}, geo, plugin)));
             }
         } else {
             col.erase(col.begin() + ndims.height, col.end());
@@ -1080,7 +1118,14 @@ void Workspaces::for_each(const std::function<void(WorkspaceRef)> &fun) {
 // Swayfire
 
 WorkspaceRef Swayfire::get_current_workspace() {
-    auto wsid = output->workspace->get_current_workspace();
+    const auto wsid = output->workspace->get_current_workspace();
+    return workspaces.get(wsid);
+}
+
+WorkspaceRef Swayfire::get_view_workspace(wayfire_view view,
+                                          bool with_transform) {
+    assert(view->get_output() == output);
+    const auto wsid = nonwf::get_view_workspace(view, with_transform);
     return workspaces.get(wsid);
 }
 
@@ -1094,11 +1139,13 @@ std::unique_ptr<ViewNode> Swayfire::init_view_node(wayfire_view view) {
 
 void Swayfire::bind_signals() {
     output->connect_signal("view-focused", &on_view_focused);
+    output->connect_signal("view-tile-request", &on_view_tile_request);
     output->connect_signal("view-layer-attached", &on_view_attached);
 }
 
 void Swayfire::unbind_signals() {
     output->disconnect_signal(&on_view_attached);
+    output->disconnect_signal(&on_view_tile_request);
     output->disconnect_signal(&on_view_focused);
 }
 
@@ -1109,14 +1156,13 @@ void Swayfire::init() {
 
     auto grid_dims = output->workspace->get_workspace_grid_size();
 
-    workspaces.update_dims(grid_dims, output->workspace->get_workarea(),
-                           output);
+    workspaces.update_dims(grid_dims, output->workspace->get_workarea(), this);
 
     auto views = output->workspace->get_views_in_layer(wf::ALL_LAYERS);
 
     for (auto view : views) {
         if (view->role == wf::VIEW_ROLE_TOPLEVEL) {
-            auto ws = workspaces.get(nonwf::get_view_workspace(view, output));
+            auto ws = workspaces.get(nonwf::get_view_workspace(view));
             ws->insert_tiled_node(init_view_node(view));
         }
     }
