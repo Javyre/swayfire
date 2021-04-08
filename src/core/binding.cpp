@@ -1,4 +1,4 @@
-#include "swayfire.hpp"
+#include "core.hpp"
 
 // Swayfire
 

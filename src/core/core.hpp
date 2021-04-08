@@ -1,5 +1,5 @@
-#ifndef SWAYFIRE_HPP
-#define SWAYFIRE_HPP
+#ifndef SWAYFIRE_CORE_HPP
+#define SWAYFIRE_CORE_HPP
 
 #include <bits/stdint-intn.h>
 #include <bits/stdint-uintn.h>
@@ -889,4 +889,4 @@ class Swayfire : public wf::plugin_interface_t {
     ~Swayfire() override;
 };
 
-#endif // ifndef SWAYFIRE_HPP
+#endif // ifndef SWAYFIRE_CORE_HPP

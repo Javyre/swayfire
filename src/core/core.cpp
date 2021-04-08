@@ -1,6 +1,6 @@
-#include "swayfire.hpp"
+#include "core.hpp"
 #include "grab.hpp"
-#include "nonstd.hpp"
+#include "../nonstd.hpp"
 
 // nonwf
 

@@ -1,7 +1,7 @@
-#ifndef GRAB_HPP
-#define GRAB_HPP
+#ifndef SWAYFIRE_GRAB_HPP
+#define SWAYFIRE_GRAB_HPP
 
-#include "swayfire.hpp"
+#include "core.hpp"
 
 /// RAII gesture controller interface.
 class IActiveGrab {
@@ -103,4 +103,4 @@ class ActiveResize : public IActiveButtonDrag {
     construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged);
 };
 
-#endif // ifndef GRAB_HPP
+#endif // ifndef SWAYFIRE_GRAB_HPP

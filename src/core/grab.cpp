@@ -1,5 +1,5 @@
 #include "grab.hpp"
-#include "swayfire.hpp"
+#include "core.hpp"
 
 #include <wayfire/nonstd/wlroots-full.hpp>
 
