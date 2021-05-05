@@ -15,7 +15,7 @@ to be used yet.
 Notable planned features:
 - Sway/i3-like Window decorations (borders, titles, and tabbed and
     stacked titles as in Sway/i3)
-- Sway/i3 ipc (wherever is makes sense)
+- Sway/i3 ipc (wherever it makes sense)
 - Option for rounded corners for floating windows and window groups
 - Scratchpad
 
