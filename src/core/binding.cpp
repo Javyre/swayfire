@@ -17,7 +17,7 @@ bool Swayfire::on_toggle_split_direction(wf::keybinding_t) {
 bool Swayfire::on_set_want_vsplit(wf::keybinding_t) {
     if (auto vnode =
             get_current_workspace()->get_active_node()->as_view_node()) {
-        vnode->prefered_split_type = SplitType::VSPLIT;
+        vnode->set_prefered_split_type(SplitType::VSPLIT);
         return true;
     }
     return false;
@@ -26,7 +26,7 @@ bool Swayfire::on_set_want_vsplit(wf::keybinding_t) {
 bool Swayfire::on_set_want_hsplit(wf::keybinding_t) {
     if (auto vnode =
             get_current_workspace()->get_active_node()->as_view_node()) {
-        vnode->prefered_split_type = SplitType::HSPLIT;
+        vnode->set_prefered_split_type(SplitType::HSPLIT);
         return true;
     }
     return false;

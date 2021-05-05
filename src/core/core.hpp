@@ -293,9 +293,9 @@ class INode : public virtual IDisplay {
     /// floating parent.
     Node find_floating_parent();
 
-    /// Apply the given function over all leaves of this tree including this
-    /// node if it isnt a parent node.
-    virtual void for_each_leaf(std::function<void(ViewNodeRef)> f) = 0;
+    /// Apply the given function over all nodes of this tree including this
+    /// node. (Pre-order traversal)
+    virtual void for_each_node(const std::function<void(Node)> &f) = 0;
 };
 
 /// Transformer to force views to their supposed geometries.
@@ -326,16 +326,20 @@ class ViewGeoEnforcer : public wf::view_2D {
 struct ViewData;
 
 /// A node corresponding to a wayfire view.
-class ViewNode : public INode {
+class ViewNode : public INode, public wf::signal_provider_t {
     friend ViewGeoEnforcer;
 
   private:
+    /// The prefered split type for upgrading this node to a split node.
+    std::optional<SplitType> prefered_split_type = std::nullopt;
+
     /// Handle the view being mapped.
     wf::signal_connection_t on_mapped = [&](wf::signal_data_t *) {
         if (view->tiled_edges != wf::TILED_EDGES_ALL)
             floating_geometry = view->get_wm_geometry();
     };
 
+    // TODO: don't kill viewnodes on view unmap
     /// Handle unmapped views.
     wf::signal_connection_t on_unmapped = [&](wf::signal_data_t *) {
         // can't inline it here since depends on ws methods.
@@ -375,9 +379,6 @@ class ViewNode : public INode {
     /// The last floating geometry of this node.
     wf::geometry_t floating_geometry;
 
-    /// The prefered split type for upgrading this node to a split node.
-    std::optional<SplitType> prefered_split_type = std::nullopt;
-
     /// The geo enforcer transformer attached to the view.
     nonstd::observer_ptr<ViewGeoEnforcer> geo_enforcer;
 
@@ -393,13 +394,19 @@ class ViewNode : public INode {
     /// is cleared.
     SplitNodeRef try_upgrade();
 
+    /// Get the prefered_split_type of this view node.
+    std::optional<SplitType> get_prefered_split_type();
+
+    /// Set the prefered_split_type of this view node.
+    void set_prefered_split_type(std::optional<SplitType> split_type);
+
     // == INode impl ==
 
     void set_geometry(wf::geometry_t geo) override;
     void set_floating(bool fl) override;
     void set_active() override;
     NodeParent get_or_upgrade_to_parent_node() override;
-    void for_each_leaf(std::function<void(ViewNodeRef)> f) override;
+    void for_each_node(const std::function<void(Node)> &f) override;
 
     // == IDisplay impl ==
 
@@ -417,6 +424,30 @@ struct ViewData : wf::custom_data_t {
 
     ViewData(ViewNodeRef node) : node(node) {}
 };
+
+/// Data passed on view-node signals emitted from swayfire
+struct ViewNodeSignalData : wf::signal_data_t {
+    /// The node that triggered the signal
+    ViewNodeRef node;
+};
+
+/// Get the ViewNode corresponding to the wayfire view.
+///
+/// \return The ViewNode of the view or nullptr.
+inline ViewNodeRef get_view_node(wayfire_view view) {
+    if (auto vdata = view->get_data<ViewData>())
+        return vdata->node;
+    return nullptr;
+}
+
+/// Get the signaled view node.
+///
+/// \return The ViewNode of the signaled view or nullptr.
+inline ViewNodeRef get_signaled_view_node(wf::signal_data_t *data) {
+    if (auto ndata = dynamic_cast<ViewNodeSignalData *>(data))
+        return ndata->node;
+    return get_view_node(wf::get_signaled_view(data));
+}
 
 /// A child of a split node.
 ///
@@ -544,7 +575,7 @@ class SplitNode : public INode, public INodeParent {
     void set_floating(bool fl) override;
     void set_ws(WorkspaceRef ws) override;
     NodeParent get_or_upgrade_to_parent_node() override;
-    void for_each_leaf(std::function<void(ViewNodeRef)> f) override;
+    void for_each_node(const std::function<void(Node)> &f) override;
 
     // == IDisplay impl ==
 
@@ -674,6 +705,9 @@ class Workspace : public INodeParent {
     /// Try to (un)tile a node in this workspace.
     void tile_request(Node node, bool tile);
 
+    /// Apply function to all nodes in this workspace.
+    void for_each_node(const std::function<void(Node)> &f);
+
     // == INodeParent impl ==
 
     Node get_adjacent(Node node, Direction dir) override;
@@ -695,10 +729,14 @@ class Workspace : public INodeParent {
 };
 
 /// Grid of all the workspaces on an output.
-struct Workspaces {
+class Workspaces {
+    friend Swayfire;
+
+  private:
     /// Workspace tree roots: workspaces[x][y].
     std::vector<std::vector<std::unique_ptr<Workspace>>> workspaces;
 
+  public:
     /// Update the dimensions of the workspace grid.
     void update_dims(wf::dimensions_t ndims, wf::geometry_t geo,
                      nonstd::observer_ptr<Swayfire> plugin);
@@ -714,15 +752,15 @@ struct Workspaces {
 class SwayfireWorkspaceImpl : public wf::workspace_implementation_t {
   public:
     bool view_movable(wayfire_view view) override {
-        if (auto vdata = view->get_data<ViewData>())
-            return vdata->node->get_floating();
+        if (auto node = get_view_node(view))
+            return node->get_floating();
 
         return false;
     }
 
     bool view_resizable(wayfire_view view) override {
-        if (auto vdata = view->get_data<ViewData>())
-            return vdata->node->get_floating();
+        if (auto node = get_view_node(view))
+            return node->get_floating();
 
         return false;
     }
@@ -740,10 +778,11 @@ class ActiveMove;
 class ActiveResize;
 
 class Swayfire : public wf::plugin_interface_t {
-  private:
+  public:
     /// The workspaces manages by swayfire.
     Workspaces workspaces;
 
+  private:
     /// Stores all the key callbacks bound.
     std::vector<std::unique_ptr<wf::key_callback>> key_callbacks;
 
@@ -821,11 +860,7 @@ class Swayfire : public wf::plugin_interface_t {
 
     /// Handle views being focused.
     wf::signal_connection_t on_view_focused = [&](wf::signal_data_t *data) {
-        const auto view = wf::get_signaled_view(data);
-
-        if (const auto vdata = view->get_data<ViewData>()) {
-            const auto node = vdata->node;
-
+        if (const auto node = get_signaled_view_node(data)) {
             if (node->get_ws()->wsid !=
                 output->workspace->get_current_workspace()) {
                 if (auto floating = node->find_floating_parent()) {
@@ -847,20 +882,19 @@ class Swayfire : public wf::plugin_interface_t {
     };
 
     /// Handle view tile requests
-    wf::signal_connection_t on_view_tile_request = [&](wf::signal_data_t
-                                                           *data) {
-        auto tr_data = static_cast<wf::view_tile_request_signal *>(data);
+    wf::signal_connection_t on_view_tile_request =
+        [&](wf::signal_data_t *data) {
+            auto tr_data = static_cast<wf::view_tile_request_signal *>(data);
 
-        if (const auto vdata = tr_data->view->get_data<ViewData>()) {
-            const auto node = vdata->node;
-            assert(!tr_data->carried_out);
-            tr_data->carried_out = true;
-            // Following the example of wayfire's simple_tile, we ignore tile
-            // requests from wayfire since we manually handle what views tile
-            // when.
-            return;
-        }
-    };
+            if (const auto node = get_view_node(tr_data->view)) {
+                assert(!tr_data->carried_out);
+                tr_data->carried_out = true;
+                // Following the example of wayfire's simple_tile, we ignore
+                // tile requests from wayfire since we manually handle what
+                // views tile when.
+                return;
+            }
+        };
 
     /// Handle new created views.
     wf::signal_connection_t on_view_attached = [&](wf::signal_data_t *data) {

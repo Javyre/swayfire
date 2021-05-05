@@ -1,6 +1,7 @@
 #include "core.hpp"
-#include "grab.hpp"
 #include "../nonstd.hpp"
+#include "grab.hpp"
+#include "plugin.hpp"
 
 // nonwf
 
@@ -239,18 +240,29 @@ void ViewNode::set_geometry(wf::geometry_t geo) {
 }
 
 SplitNodeRef ViewNode::try_upgrade() {
-    if (prefered_split_type) {
+    if (auto split_type = get_prefered_split_type()) {
         auto new_parent = std::make_unique<SplitNode>(get_geometry());
         auto new_parent_ref = new_parent.get();
-        new_parent->split_type = *prefered_split_type;
+        new_parent->split_type = *split_type;
         auto owned_self = parent->swap_child(this, std::move(new_parent));
         owned_self->set_floating(false);
         new_parent_ref->insert_child_back(std::move(owned_self));
 
-        prefered_split_type = std::nullopt;
+        set_prefered_split_type(std::nullopt);
         return new_parent_ref;
     }
     return nullptr;
+}
+
+std::optional<SplitType> ViewNode::get_prefered_split_type() {
+    return prefered_split_type;
+}
+
+void ViewNode::set_prefered_split_type(std::optional<SplitType> split_type) {
+    if (split_type != prefered_split_type) {
+        emit_signal("prefered-split-type-changed", nullptr);
+        prefered_split_type = split_type;
+    }
 }
 
 void ViewNode::set_active() {
@@ -267,7 +279,7 @@ NodeParent ViewNode::get_or_upgrade_to_parent_node() {
         return parent;
 }
 
-void ViewNode::for_each_leaf(std::function<void(ViewNodeRef)> f) { f(this); }
+void ViewNode::for_each_node(const std::function<void(Node)> &f) { f(this); }
 
 // SplitNode
 
@@ -445,7 +457,7 @@ Node SplitNode::try_downgrade() {
         auto only_child_ref = only_child.get();
 
         if (auto vnode = only_child->as_view_node())
-            vnode->prefered_split_type = split_type;
+            vnode->set_prefered_split_type(split_type);
 
         bool was_active = false;
         if (auto active = get_ws()->get_active_node())
@@ -463,9 +475,10 @@ Node SplitNode::try_downgrade() {
 
 NodeParent SplitNode::get_or_upgrade_to_parent_node() { return this; }
 
-void SplitNode::for_each_leaf(std::function<void(ViewNodeRef)> f) {
+void SplitNode::for_each_node(const std::function<void(Node)> &f) {
+    f(this);
     for (auto &c : children)
-        c.node->for_each_leaf(f);
+        c.node->for_each_node(f);
 }
 
 OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
@@ -1000,6 +1013,13 @@ void Workspace::tile_request(Node const node, const bool tile) {
     }
 }
 
+void Workspace::for_each_node(const std::function<void(Node)> &f) {
+    for (auto &node : floating_nodes) {
+        node->for_each_node(f);
+    }
+    tiled_root->for_each_node(f);
+}
+
 Node Workspace::get_last_active_node() { return active_node; }
 
 Node Workspace::get_adjacent(Node node, Direction dir) {
@@ -1133,6 +1153,10 @@ std::unique_ptr<ViewNode> Swayfire::init_view_node(wayfire_view view) {
     auto node = std::make_unique<ViewNode>(view);
     view->store_data<ViewData>(std::make_unique<ViewData>(node));
 
+    ViewNodeSignalData data = {};
+    data.node = node;
+    output->emit_signal("swf-view-node-attached", &data);
+
     LOGD("New view-node for ", view->to_string(), ": ", node.get());
     return node;
 }
@@ -1167,19 +1191,23 @@ void Swayfire::init() {
         }
     }
 
-    if (auto active_view = output->get_active_view()) {
-        if (auto vdata = active_view->get_data<ViewData>()) {
-            vdata->node->set_active();
-        }
-    }
+    if (auto active_view = output->get_active_view())
+        if (auto node = get_view_node(active_view))
+            node->set_active();
 
     init_grab_interface();
 
     bind_signals();
     bind_keys();
+
+    output->store_data(std::make_unique<SwayfireCustomData>(this), "swayfire-core");
+
+    output->emit_signal("swf-init", nullptr);
 }
 
 void Swayfire::fini() {
+    output->emit_signal("swf-fini", nullptr);
+
     LOGD("==== fini ====");
 
     unbind_keys();

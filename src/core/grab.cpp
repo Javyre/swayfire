@@ -114,9 +114,15 @@ void ActiveResize::pointer_motion(uint32_t x, uint32_t y) {
 
     // Only actually apply view geometries once the whole tree's geometries have
     // been updates.
-    root_node->for_each_leaf([](auto n) { n->push_safe_set_geo(); });
+    root_node->for_each_node([](auto n) {
+        if (auto v = n->as_view_node())
+            v->push_safe_set_geo();
+    });
     dragged->try_resize({nw, nh}, resizing_edges);
-    root_node->for_each_leaf([](auto n) { n->pop_safe_set_geo(); });
+    root_node->for_each_node([](auto n) {
+        if (auto v = n->as_view_node())
+            v->pop_safe_set_geo();
+    });
     root_node->refresh_geometry();
 }
 
@@ -174,9 +180,9 @@ void Swayfire::init_grab_interface() {
 
     on_move_activate = [&](auto) {
         if (auto view = wf::get_core().get_cursor_focus_view()) {
-            if (auto vdata = view->get_data<ViewData>()) {
-                if (auto node = vdata->node->find_floating_parent()) {
-                    if (auto active = ActiveMove::construct(this, node)) {
+            if (auto node = get_view_node(view)) {
+                if (auto fnode = node->find_floating_parent()) {
+                    if (auto active = ActiveMove::construct(this, fnode)) {
                         active_grab = std::move(active);
                         return true;
                     }
@@ -188,8 +194,8 @@ void Swayfire::init_grab_interface() {
 
     on_resize_activate = [&](auto) {
         if (auto view = wf::get_core().get_cursor_focus_view()) {
-            if (auto vdata = view->get_data<ViewData>()) {
-                if (auto active = ActiveResize::construct(this, vdata->node)) {
+            if (auto node = get_view_node(view)) {
+                if (auto active = ActiveResize::construct(this, node)) {
                     active_grab = std::move(active);
                     return true;
                 }

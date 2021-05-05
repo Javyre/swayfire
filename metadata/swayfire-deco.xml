@@ -1,0 +1,109 @@
+<?xml version="1.0"?>
+<wayfire>
+	<plugin name="swayfire-deco">
+	<_short>Swayfire Decorations</_short>
+	<_long>Tiling window manager inspired by Sway - Decorations plugin</_long>
+	<category>Effects</category>
+    <option name="border_width" type="int">
+        <_short>Border width</_short>
+        <_long>Border width of node decorations.</_long>
+        <default>3</default>
+    </option>
+
+    <option name="border_radius" type="int">
+        <_short>Border radius</_short>
+        <_long>Border radius of node decorations.</_long>
+        <default>0</default>
+    </option>
+
+    <option name="title_bar" type="bool">
+        <_short>Enable titles</_short>
+        <_long>Enable title bar in decorations.</_long>
+        <default>false</default>
+    </option>
+
+    <option name="focused.border" type="color">
+        <_short>Focused node border color</_short>
+        <_long>A node which currently has the focus.</_long>
+        <default>0.16 0.33 0.47 1.0</default>
+    </option>
+    <option name="focused.background" type="color">
+        <_short>Focused node background color</_short>
+        <_long>A node which currently has the focus.</_long>
+        <default>0.16 0.33 0.47 1.0</default>
+    </option>
+    <option name="focused.text" type="color">
+        <_short>Focused node text color</_short>
+        <_long>A node which currently has the focus.</_long>
+        <default>1.0 1.0 1.0 1.0</default>
+    </option>
+    <option name="focused.indicator" type="color">
+        <_short>Focused node indicator color</_short>
+        <_long>A node which currently has the focus.</_long>
+        <default>0.18 0.62 0.96 1.0</default>
+    </option>
+    <option name="focused.child_border" type="color">
+        <_short>Focused node child border color</_short>
+        <_long>A node which currently has the focus.</_long>
+        <default>0.16 0.33 0.47 1.0</default>
+    </option>
+
+    <option name="focused_inactive.border" type="color">
+        <_short>Focused inactive node border color</_short>
+        <_long>A node which is the focused one of its parent but is not the
+            active node.</_long>
+        <default>0.20 0.20 0.20 1.0</default>
+    </option>
+    <option name="focused_inactive.background" type="color">
+        <_short>Focused inactive node background color</_short>
+        <_long>A node which is the focused one of its parent but is not the
+            active node.</_long>
+        <default>0.37 0.40 0.42 1.0</default>
+    </option>
+    <option name="focused_inactive.text" type="color">
+        <_short>Focused inactive node text color</_short>
+        <_long>A node which is the focused one of its parent but is not the
+            active node.</_long>
+        <default>1.0 1.0 1.0 1.0</default>
+    </option>
+    <option name="focused_inactive.indicator" type="color">
+        <_short>Focused inactive node indicator color</_short>
+        <_long>A node which is the focused one of its parent but is not the
+            active node.</_long>
+        <default>0.28 0.31 0.31 1.0</default>
+    </option>
+    <option name="focused_inactive.child_border" type="color">
+        <_short>Focused inactive node child border color</_short>
+        <_long>A node which is the focused one of its parent but is not the
+            active node.</_long>
+        <default>0.37 0.40 0.42 1.0</default>
+    </option>
+
+    <option name="unfocused.border" type="color">
+        <_short>Unfocused node border color</_short>
+        <_long>A node which is not the docused one of its container.</_long>
+        <default>0.13 0.13 0.13 1.0</default>
+    </option>
+    <option name="unfocused.background" type="color">
+        <_short>Unfocused node background color</_short>
+        <_long>A node which is not the docused one of its container.</_long>
+        <default>0.13 0.13 0.13 1.0</default>
+    </option>
+    <option name="unfocused.text" type="color">
+        <_short>Unfocused node text color</_short>
+        <_long>A node which is not the docused one of its container.</_long>
+        <default>0.53 0.53 0.53 1.0</default>
+    </option>
+    <option name="unfocused.indicator" type="color">
+        <_short>Unfocused node indicator color</_short>
+        <_long>A node which is not the docused one of its container.</_long>
+        <default>0.16 0.18 0.18 1.0</default>
+    </option>
+    <option name="unfocused.child_border" type="color">
+        <_short>Unfocused node child border color</_short>
+        <_long>A node which is not the docused one of its container.</_long>
+        <default>0.13 0.13 0.13 1.0</default>
+    </option>
+
+	</plugin>
+</wayfire>

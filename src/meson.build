@@ -4,3 +4,4 @@ all_src += files([
 ])
 
 subdir('core')
+subdir('deco')
