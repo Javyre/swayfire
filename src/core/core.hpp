@@ -615,9 +615,6 @@ class Workspace : public INodeParent {
     /// Reference to the node currently active in this ws.
     Node active_node = nullptr;
 
-    /// Reference to the tiled node last active in this ws.
-    Node active_tiled_node = nullptr;
-
     /// The last active floating node index.
     uint32_t active_floating = 0;
 
@@ -683,9 +680,6 @@ class Workspace : public INodeParent {
 
     /// Swap the root tiled split node with another.
     OwnedNode swap_tiled_root(std::unique_ptr<SplitNode> other);
-
-    /// Get the last active tiled node in this ws.
-    Node get_active_tiled_node();
 
     // == Both ==
 

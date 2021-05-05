@@ -1,15 +1,14 @@
+#include "../nonstd.hpp"
 #include "core.hpp"
 
 // Swayfire
 
 bool Swayfire::on_toggle_split_direction(wf::keybinding_t) {
-    auto ws = get_current_workspace();
-
-    if (ws->get_active_node()) {
-        if (auto parent = ws->get_active_node()->parent->as_split_node()) {
-            parent->toggle_split_direction();
-            return true;
-        }
+    if (auto parent = get_current_workspace()
+                          ->get_active_node()
+                          ->parent->as_split_node()) {
+        parent->toggle_split_direction();
+        return true;
     }
     return false;
 }
@@ -60,7 +59,7 @@ bool Swayfire::on_focus_up(wf::keybinding_t) {
 bool Swayfire::on_toggle_focus_tile(wf::keybinding_t) {
     auto ws = get_current_workspace();
     if (ws->get_active_node()->get_floating()) {
-        if (auto tiled = ws->get_active_tiled_node())
+        if (auto tiled = ws->tiled_root->get_last_active_node())
             tiled->set_active();
         else
             return false;
@@ -87,7 +86,7 @@ bool Swayfire::move_direction(Direction dir) {
         }
     }
 
-    ws->set_active_child(active);
+    active->set_active();
     return true;
 }
 
@@ -146,6 +145,6 @@ void Swayfire::bind_keys() {
 }
 
 void Swayfire::unbind_keys() {
-    std::for_each(key_callbacks.rbegin(), key_callbacks.rend(),
-                  [&](auto &cb) { output->rem_binding(cb.get()); });
+    for (auto &cb : key_callbacks | nonstd::reverse)
+        output->rem_binding(cb.get());
 }

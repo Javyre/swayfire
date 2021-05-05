@@ -791,14 +791,12 @@ Workspace::Workspace(wf::point_t wsid, wf::geometry_t geo,
 
 Workspace::~Workspace() { output->disconnect_signal(&on_workarea_changed); }
 
-void Workspace::set_active_node(Node node) {
-    if (!node->get_floating())
-        active_tiled_node = node;
+void Workspace::set_active_node(Node node) { active_node = node; }
 
-    active_node = node;
+Node Workspace::get_active_node() {
+    assert(active_node && "There should always be a valid active node set.");
+    return active_node;
 }
-
-Node Workspace::get_active_node() { return active_node; }
 
 void Workspace::insert_floating_node(OwnedNode node) {
     node->parent = this;
@@ -858,8 +856,6 @@ Node Workspace::get_active_floating_node() {
     return floating_nodes.at(active_floating).get();
 }
 
-Node Workspace::get_active_tiled_node() { return active_tiled_node; }
-
 OwnedNode Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
     auto ret = std::move(tiled_root);
 
@@ -883,16 +879,7 @@ OwnedNode Workspace::remove_tiled_node(Node node) {
         return nullptr;
     }
 
-    auto old_parent = node->parent;
-    auto owned_node = node->parent->remove_child(node);
-
-    if (active_tiled_node.get() == node.get()) {
-        active_tiled_node = old_parent->get_last_active_node();
-        if (!active_tiled_node)
-            active_tiled_node = tiled_root.get();
-    }
-
-    return owned_node;
+    return node->parent->remove_child(node);
 }
 
 OwnedNode Workspace::remove_node(Node node) {
@@ -905,11 +892,11 @@ void Workspace::node_removed(Node node) {
     // remove_floating_node as floating nodes are always direct children of
     // the ws.
 
-    if (node.get() == active_tiled_node.get())
-        active_tiled_node = tiled_root.get();
-
-    if (node.get() == active_node.get())
-        active_node = active_tiled_node;
+    if (node.get() == active_node.get()) {
+        active_node = tiled_root->get_last_active_node();
+        if (!active_node)
+            active_node = tiled_root;
+    }
 }
 
 void Workspace::insert_child(OwnedNode node) {
@@ -924,21 +911,12 @@ OwnedNode Workspace::remove_child(Node node) {
         ret = remove_floating_node(node);
     } else if (node.get() == tiled_root.get()) {
         ret = swap_tiled_root(std::make_unique<SplitNode>(workarea));
-        if (ret.get() == active_tiled_node.get()) {
-            if (auto new_active = tiled_root->get_last_active_node())
-                active_tiled_node = new_active;
-            else
-                active_tiled_node = tiled_root.get();
-        }
-
-        if (ret.get() == active_node.get())
-            active_node = active_tiled_node;
     } else {
         LOGE("Node is not a direct child of ", this, ": ", node);
         return nullptr;
     }
 
-    if (node.get() == get_active_node().get())
+    if (node.get() == active_node.get())
         tiled_root->set_active();
 
     return ret;
@@ -971,7 +949,9 @@ void Workspace::set_active_child(Node node) {
         }
         active_floating = std::distance(floating_nodes.begin(), child);
     } else {
-        active_tiled_node = node;
+        assert(
+            node.get() == tiled_root.get() &&
+            "set_active_child should only be called on direct children nodes.");
     }
 }
 
@@ -1000,12 +980,12 @@ void Workspace::set_workarea(wf::geometry_t geo) {
 void Workspace::tile_request(Node const node, const bool tile) {
     if (node->get_floating() && tile) {
         insert_tiled_node(remove_floating_node(node));
-        if (active_node.get() == node.get())
-            active_tiled_node = node.get();
-        return;
-    }
 
-    if (!node->get_floating() && !tile) {
+    } else if (!node->get_floating() && !tile) {
+        // Avoid untiling empty tiled root node.
+        if (node.get() == tiled_root.get() && tiled_root->children.size() == 0)
+            return;
+
         insert_floating_node(remove_tiled_node(node));
         if (active_node.get() == node.get())
             active_floating =
@@ -1200,7 +1180,8 @@ void Swayfire::init() {
     bind_signals();
     bind_keys();
 
-    output->store_data(std::make_unique<SwayfireCustomData>(this), "swayfire-core");
+    output->store_data(std::make_unique<SwayfireCustomData>(this),
+                       "swayfire-core");
 
     output->emit_signal("swf-init", nullptr);
 }
