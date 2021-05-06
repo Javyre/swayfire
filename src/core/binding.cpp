@@ -56,20 +56,34 @@ bool Swayfire::on_focus_up(wf::keybinding_t) {
     return focus_direction(Direction::UP);
 }
 
+bool focus_tiled(WorkspaceRef ws) {
+    if (auto tiled = ws->tiled_root->get_last_active_node()) {
+        tiled->set_active();
+        return true;
+    }
+    return false;
+}
+
+bool focus_floating(WorkspaceRef ws) {
+    if (auto floating = ws->get_active_floating_node()) {
+        if (auto fsplit = floating->as_split_node()) {
+            if (auto last_active = fsplit->get_last_active_node()) {
+                last_active->set_active();
+                return true;
+            }
+        }
+        floating->set_active();
+        return true;
+    }
+    return false;
+}
+
 bool Swayfire::on_toggle_focus_tile(wf::keybinding_t) {
     auto ws = get_current_workspace();
-    if (ws->get_active_node()->get_floating()) {
-        if (auto tiled = ws->tiled_root->get_last_active_node())
-            tiled->set_active();
-        else
-            return false;
-    } else {
-        if (auto floating = ws->get_active_floating_node())
-            floating->set_active();
-        else
-            return false;
-    }
-    return true;
+    const bool is_floating =
+        ws->get_active_node()->find_floating_parent() != nullptr;
+
+    return is_floating ? focus_tiled(ws) : focus_floating(ws);
 }
 
 bool Swayfire::move_direction(Direction dir) {

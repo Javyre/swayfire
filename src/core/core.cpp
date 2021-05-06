@@ -175,11 +175,9 @@ void ViewNode::on_unmapped_impl() {
     auto ws = this->ws;
     auto old_parent = parent;
 
-    parent->remove_child(this);
+    (void)ws->remove_node(this);
     if (auto split = old_parent->as_split_node())
         split->try_downgrade();
-
-    ws->node_removed(this);
 
     // view node dies here.
 }
@@ -204,7 +202,6 @@ void ViewNode::on_geometry_changed_impl() {
 
             auto const old_ws = get_ws();
             auto owned_self = old_ws->remove_tiled_node(this);
-            old_ws->node_removed(this);
             new_ws->insert_tiled_node(std::move(owned_self));
         }
     }
@@ -810,17 +807,16 @@ NodeIter Workspace::find_floating(Node node) {
                         [&](auto &c) { return c.get() == node.get(); });
 }
 
-OwnedNode Workspace::remove_floating_node(Node node) {
-    auto &fl = floating_nodes;
+OwnedNode Workspace::remove_floating_node(Node node, bool reset_active) {
     auto child = find_floating(node);
-    if (child == fl.end()) {
+    if (child == floating_nodes.end()) {
         LOGE("Node not floating in ", this, ": ", node);
         return nullptr;
     }
 
     auto owned_node = std::move(*child);
 
-    fl.erase(child);
+    floating_nodes.erase(child);
 
     if (floating_nodes.empty())
         active_floating = 0;
@@ -828,13 +824,15 @@ OwnedNode Workspace::remove_floating_node(Node node) {
         active_floating = std::clamp(active_floating, (uint32_t)0,
                                      (uint32_t)(floating_nodes.size() - 1));
 
+    if (reset_active && node.get() == active_node.get())
+        reset_active_node();
+
     return owned_node;
 }
 
 OwnedNode Workspace::swap_floating_node(Node node, OwnedNode other) {
-    auto &fl = floating_nodes;
     auto child = find_floating(node);
-    if (child == fl.end()) {
+    if (child == floating_nodes.end()) {
         LOGE("Node not floating in ", this, ": ", node);
         return nullptr;
     }
@@ -868,35 +866,36 @@ OwnedNode Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
 }
 
 void Workspace::insert_tiled_node(OwnedNode node) {
+    assert(get_active_node().get() != node.get() &&
+           "Cannot insert node into itself.");
     auto parent = get_active_node()->get_or_upgrade_to_parent_node();
 
     parent->insert_child(std::move(node));
 }
 
-OwnedNode Workspace::remove_tiled_node(Node node) {
+OwnedNode Workspace::remove_tiled_node(Node node, bool reset_active) {
     if (node->get_floating() || node->get_ws().get() != this) {
         LOGE("Node not tiled in ", this, ": ", node);
         return nullptr;
     }
 
-    return node->parent->remove_child(node);
+    auto owned_node = node->parent->remove_child(node);
+
+    if (reset_active && node.get() == active_node.get())
+        reset_active_node();
+
+    return owned_node;
 }
 
-OwnedNode Workspace::remove_node(Node node) {
-    return node->get_floating() ? remove_floating_node(node)
-                                : remove_tiled_node(node);
+OwnedNode Workspace::remove_node(Node node, bool reset_active) {
+    return node->get_floating() ? remove_floating_node(node, reset_active)
+                                : remove_tiled_node(node, reset_active);
 }
 
-void Workspace::node_removed(Node node) {
-    // The case for a floating node is already covered in
-    // remove_floating_node as floating nodes are always direct children of
-    // the ws.
-
-    if (node.get() == active_node.get()) {
-        active_node = tiled_root->get_last_active_node();
-        if (!active_node)
-            active_node = tiled_root;
-    }
+void Workspace::reset_active_node() {
+    active_node = tiled_root->get_last_active_node();
+    if (!active_node)
+        active_node = tiled_root;
 }
 
 void Workspace::insert_child(OwnedNode node) {
@@ -908,7 +907,7 @@ OwnedNode Workspace::remove_child(Node node) {
 
     if (node->get_floating()) {
         // floating nodes are always direct children of the workspace
-        ret = remove_floating_node(node);
+        ret = remove_floating_node(node, false);
     } else if (node.get() == tiled_root.get()) {
         ret = swap_tiled_root(std::make_unique<SplitNode>(workarea));
     } else {
@@ -978,6 +977,8 @@ void Workspace::set_workarea(wf::geometry_t geo) {
 }
 
 void Workspace::tile_request(Node const node, const bool tile) {
+    const bool was_active = active_node.get() == node.get();
+
     if (node->get_floating() && tile) {
         insert_tiled_node(remove_floating_node(node));
 
@@ -991,6 +992,11 @@ void Workspace::tile_request(Node const node, const bool tile) {
             active_floating =
                 std::distance(floating_nodes.begin(), find_floating(node));
     }
+
+    // The remove_x_node() calls reset the active node (without actually
+    // sending focus requests), so we can just set it back here.
+    if (was_active)
+        active_node = node;
 }
 
 void Workspace::for_each_node(const std::function<void(Node)> &f) {

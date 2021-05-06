@@ -291,6 +291,8 @@ class INode : public virtual IDisplay {
 
     /// Return this node if it's floating or traverse the tree upward to find a
     /// floating parent.
+    ///
+    /// \return a floating Node or nullptr if one isn't found.
     Node find_floating_parent();
 
     /// Apply the given function over all nodes of this tree including this
@@ -573,6 +575,8 @@ class SplitNode : public INode, public INodeParent {
     void begin_resize() override;
     void end_resize() override;
     void set_floating(bool fl) override;
+    // void set_active() override; // TODO: make set_active on split nodes raise
+    // its content to the front and unfocus any views.
     void set_ws(WorkspaceRef ws) override;
     NodeParent get_or_upgrade_to_parent_node() override;
     void for_each_node(const std::function<void(Node)> &f) override;
@@ -627,6 +631,9 @@ class Workspace : public INodeParent {
         set_workarea(wcdata->new_workarea);
     };
 
+    /// Reset the active node to the next valid node in the ws
+    void reset_active_node();
+
   public:
     Workspace(wf::point_t wsid, wf::geometry_t geo,
               nonstd::observer_ptr<Swayfire> swayfire);
@@ -657,9 +664,9 @@ class Workspace : public INodeParent {
 
     /// Remove a floating node from this workspace.
     ///
-    /// If you are really removing the node from this workspace, call
-    /// node_removed() after this.
-    OwnedNode remove_floating_node(Node node);
+    /// Optionally reset the active node in this ws to the next valid candidate.
+    /// Set reset_active=false to avoid unfocusing the node.
+    OwnedNode remove_floating_node(Node node, bool reset_active = true);
 
     /// Swap a floating node in this workspace for another node.
     OwnedNode swap_floating_node(Node node, OwnedNode other);
@@ -674,9 +681,9 @@ class Workspace : public INodeParent {
 
     /// Remove a tiled node from this ws.
     ///
-    /// If you are really removing the node from this workspace, call
-    /// node_removed() after this.
-    OwnedNode remove_tiled_node(Node node);
+    /// Optionally reset the active node in this ws to the next valid candidate.
+    /// Set reset_active=false to avoid unfocusing the node.
+    OwnedNode remove_tiled_node(Node node, bool reset_active = true);
 
     /// Swap the root tiled split node with another.
     OwnedNode swap_tiled_root(std::unique_ptr<SplitNode> other);
@@ -685,16 +692,12 @@ class Workspace : public INodeParent {
 
     /// Remove a node from this ws.
     ///
-    /// If you are really removing the node from this workspace, call
-    /// node_removed() after this.
-    OwnedNode remove_node(Node node);
-
-    /// Clean up after a node has been removed from this ws.
+    /// Optionally reset the active node in this ws to the next valid candidate.
     ///
     /// A lot of the time remove_node() is called as an intermediary step where
-    /// the node will be moved back into the workspace in the same action. This
-    /// method is for after one really removes a node from this workspace.
-    void node_removed(Node node);
+    /// the node will be moved back into the workspace in the same action.
+    /// Set reset_active=false to avoid unfocusing the node.
+    OwnedNode remove_node(Node node, bool reset_active = true);
 
     /// Try to (un)tile a node in this workspace.
     void tile_request(Node node, bool tile);
@@ -863,7 +866,6 @@ class Swayfire : public wf::plugin_interface_t {
 
                     to_ws->insert_floating_node(
                         from_ws->remove_floating_node(floating));
-                    from_ws->node_removed(floating);
 
                     floating->set_geometry(nonwf::local_to_relative_geometry(
                         floating->get_geometry(), from_ws->wsid, to_ws->wsid,
