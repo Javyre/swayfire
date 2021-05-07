@@ -111,8 +111,9 @@ void SwayfireDeco::decorate_node(Node node) {
     if (auto vnode = node->as_view_node()) {
         LOGD("Decorating ", vnode);
         auto surf = std::make_unique<ViewDecoration>(vnode, &options);
-        vnode->view->set_decoration(surf.get());
+        auto surfref = surf.get();
         vnode->view->add_subsurface(std::move(surf), false);
+        vnode->view->set_decoration(surfref);
         vnode->refresh_geometry();
     } else if (auto snode = node->as_split_node()) {
         // TODO: implement split node decorations.
