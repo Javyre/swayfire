@@ -57,7 +57,7 @@ bool Swayfire::on_focus_up(wf::keybinding_t) {
 }
 
 bool focus_tiled(WorkspaceRef ws) {
-    if (auto tiled = ws->tiled_root->get_last_active_node()) {
+    if (auto tiled = ws->tiled_root.node->get_last_active_node()) {
         tiled->set_active();
         return true;
     }
@@ -94,7 +94,7 @@ bool Swayfire::move_direction(Direction dir) {
     if (!active->parent->move_child(active, dir))
         return false;
 
-    if (old_parent.get() != ws->tiled_root.get()) {
+    if (old_parent.get() != ws->tiled_root.node.get()) {
         if (auto old_parent_split = old_parent->as_split_node()) {
             old_parent_split->try_downgrade();
         }

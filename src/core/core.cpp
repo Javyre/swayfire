@@ -77,10 +77,20 @@ ViewNodeRef INode::as_view_node() { return dynamic_cast<ViewNode *>(this); }
 void INode::set_active() {
     parent->set_active_child(this);
     ws->set_active_node(this);
+    bring_to_front();
 }
 
 void INode::tile_request(const bool tile) {
     get_ws()->tile_request(this, tile);
+}
+
+Node INode::find_root_parent() {
+    if (auto psplit = parent->as_split_node())
+        return psplit->find_root_parent();
+
+    assert(parent.get() == get_ws().get() &&
+           "non-split node parent must be the node's workspace.");
+    return this;
 }
 
 Node INode::find_floating_parent() {
@@ -262,6 +272,25 @@ void ViewNode::set_prefered_split_type(std::optional<SplitType> split_type) {
     }
 }
 
+void ViewNode::set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) {
+    assert(sublayer.get() != nullptr);
+    get_ws()->output->workspace->add_view_to_sublayer(view, sublayer);
+}
+
+void ViewNode::bring_to_front() {
+    auto &wfws = get_ws()->output->workspace;
+    wfws->bring_to_front(view);
+
+    // TODO: remove this code when
+    // https://github.com/WayfireWM/wayfire/pull/1173 gets released.
+    // This damaging should be done by wayfire and not swayfire:
+    auto views = wfws->get_views_on_workspace_sublayer(
+        get_ws()->wsid, get_ws()->get_child_sublayer(find_root_parent()));
+
+    for (auto v : views)
+        v->damage();
+}
+
 void ViewNode::set_active() {
     INode::set_active();
 
@@ -320,6 +349,7 @@ void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
     node->parent = this;
     node->set_floating(false);
     node->set_ws(get_ws());
+    node->set_sublayer(get_ws()->get_child_sublayer(find_root_parent()));
 
     double total_ratio = 0;
     if (!children.empty()) {
@@ -446,7 +476,7 @@ void SplitNode::toggle_split_direction() {
 Node SplitNode::try_downgrade() {
     if (children.size() == 1) {
         // Can only swap tiled_root of workspace with a split node.
-        if (get_ws()->tiled_root.get() == this &&
+        if (get_ws()->tiled_root.node.get() == this &&
             !children.front().node->as_split_node())
             return nullptr;
 
@@ -701,6 +731,18 @@ bool SplitNode::move_child(Node node, Direction dir) {
 
 void SplitNode::set_floating(bool fl) { floating = fl; }
 
+void SplitNode::set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) {
+    for (auto &child : children)
+        child.node->set_sublayer(sublayer);
+}
+
+void SplitNode::bring_to_front() {
+    // We just need to bring to front a single view in the sublayer to bring
+    // them all to front.
+    if (auto active = get_last_active_node())
+        active->bring_to_front();
+}
+
 void SplitNode::set_ws(WorkspaceRef ws) {
     INode::set_ws(ws);
 
@@ -779,9 +821,11 @@ Workspace::Workspace(wf::point_t wsid, wf::geometry_t geo,
                      nonstd::observer_ptr<Swayfire> plugin)
     : workarea(geo), wsid(wsid), plugin(plugin), output(plugin->output) {
 
+    tiled_root.sublayer = output->workspace->create_sublayer(
+        wf::LAYER_WORKSPACE, wf::SUBLAYER_FLOATING);
     (void)swap_tiled_root(std::make_unique<SplitNode>(geo));
-    LOGD("ws created with root ", tiled_root->to_string());
-    active_node = tiled_root;
+    LOGD("ws created with root ", tiled_root.node->to_string());
+    active_node = tiled_root.node;
 
     output->connect_signal("workarea-changed", &on_workarea_changed);
 }
@@ -799,12 +843,16 @@ void Workspace::insert_floating_node(OwnedNode node) {
     node->parent = this;
     node->set_floating(true);
     node->set_ws(this);
-    floating_nodes.push_back(std::move(node));
+    auto layer = output->workspace->create_sublayer(wf::LAYER_WORKSPACE,
+                                                    wf::SUBLAYER_FLOATING);
+    node->set_sublayer(layer);
+
+    floating_nodes.push_back({std::move(node), layer});
 }
 
-NodeIter Workspace::find_floating(Node node) {
+Workspace::FloatingNodeIter Workspace::find_floating(Node node) {
     return std::find_if(floating_nodes.begin(), floating_nodes.end(),
-                        [&](auto &c) { return c.get() == node.get(); });
+                        [&](auto &c) { return c.node.get() == node.get(); });
 }
 
 OwnedNode Workspace::remove_floating_node(Node node, bool reset_active) {
@@ -814,7 +862,8 @@ OwnedNode Workspace::remove_floating_node(Node node, bool reset_active) {
         return nullptr;
     }
 
-    auto owned_node = std::move(*child);
+    auto owned_node = std::move(child->node);
+    output->workspace->destroy_sublayer(child->sublayer);
 
     floating_nodes.erase(child);
 
@@ -840,9 +889,11 @@ OwnedNode Workspace::swap_floating_node(Node node, OwnedNode other) {
     other->parent = this;
     other->set_floating(true);
     other->set_ws(this);
-    other->set_geometry((*child)->get_geometry());
+    other->set_geometry(child->node->get_geometry());
+    other->set_sublayer(child->sublayer);
 
-    (*child).swap(other);
+    // swap the pointers
+    child->node.swap(other);
 
     return other;
 }
@@ -851,16 +902,17 @@ Node Workspace::get_active_floating_node() {
     if (floating_nodes.empty())
         return nullptr;
 
-    return floating_nodes.at(active_floating).get();
+    return floating_nodes.at(active_floating).node.get();
 }
 
 OwnedNode Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
-    auto ret = std::move(tiled_root);
+    auto ret = std::move(tiled_root.node);
 
-    tiled_root = std::move(other);
-    tiled_root->parent = this;
-    tiled_root->set_floating(false);
-    tiled_root->set_ws(this);
+    tiled_root.node = std::move(other);
+    tiled_root.node->parent = this;
+    tiled_root.node->set_floating(false);
+    tiled_root.node->set_ws(this);
+    tiled_root.node->set_sublayer(tiled_root.sublayer);
 
     return ret;
 }
@@ -893,13 +945,13 @@ OwnedNode Workspace::remove_node(Node node, bool reset_active) {
 }
 
 void Workspace::reset_active_node() {
-    active_node = tiled_root->get_last_active_node();
+    active_node = tiled_root.node->get_last_active_node();
     if (!active_node)
-        active_node = tiled_root;
+        active_node = tiled_root.node;
 }
 
 void Workspace::insert_child(OwnedNode node) {
-    tiled_root->insert_child(std::move(node));
+    tiled_root.node->insert_child(std::move(node));
 }
 
 OwnedNode Workspace::remove_child(Node node) {
@@ -908,7 +960,7 @@ OwnedNode Workspace::remove_child(Node node) {
     if (node->get_floating()) {
         // floating nodes are always direct children of the workspace
         ret = remove_floating_node(node, false);
-    } else if (node.get() == tiled_root.get()) {
+    } else if (node.get() == tiled_root.node.get()) {
         ret = swap_tiled_root(std::make_unique<SplitNode>(workarea));
     } else {
         LOGE("Node is not a direct child of ", this, ": ", node);
@@ -916,7 +968,7 @@ OwnedNode Workspace::remove_child(Node node) {
     }
 
     if (node.get() == active_node.get())
-        tiled_root->set_active();
+        tiled_root.node->set_active();
 
     return ret;
 }
@@ -925,15 +977,17 @@ OwnedNode Workspace::swap_child(Node node, OwnedNode other) {
     if (node->get_floating()) {
         // floating nodes are always direct children of the workspace
         return swap_floating_node(node, std::move(other));
-    } else if (node.get() == tiled_root.get()) {
+    } else if (node.get() == tiled_root.node.get()) {
         auto other_ = other.release();
-        if (auto other_split = dynamic_cast<SplitNode *>(other_))
+        if (auto other_split = dynamic_cast<SplitNode *>(other_)) {
             return swap_tiled_root(std::unique_ptr<SplitNode>(other_split));
 
-        LOGE("Cannot swap non-split node with tiled-root node of ", this);
+        } else {
+            LOGE("Cannot swap non-split node with tiled-root node of ", this);
 
-        delete other_;
-        return nullptr;
+            delete other_;
+            return nullptr;
+        }
     } else {
         LOGE("Node is not a direct child of ", this, ": ", node);
         return nullptr;
@@ -949,17 +1003,17 @@ void Workspace::set_active_child(Node node) {
         active_floating = std::distance(floating_nodes.begin(), child);
     } else {
         assert(
-            node.get() == tiled_root.get() &&
+            node.get() == tiled_root.node.get() &&
             "set_active_child should only be called on direct children nodes.");
     }
 }
 
 void Workspace::set_workarea(wf::geometry_t geo) {
     workarea = geo;
-    tiled_root->set_geometry(geo);
+    tiled_root.node->set_geometry(geo);
 
     for (auto &floating : floating_nodes) {
-        auto ngeo = floating->get_geometry();
+        auto ngeo = floating.node->get_geometry();
 
         // Make sure they are still visible in the workarea.
 
@@ -972,8 +1026,21 @@ void Workspace::set_workarea(wf::geometry_t geo) {
                                 geo.height - MIN_VIEW_SIZE);
 
         // Refresh their geometry.
-        floating->set_geometry(ngeo);
+        floating.node->set_geometry(ngeo);
     }
+}
+
+nonstd::observer_ptr<wf::sublayer_t> Workspace::get_child_sublayer(Node node) {
+    if (node.get() == tiled_root.node.get())
+        return tiled_root.sublayer;
+
+    auto child = find_floating(node);
+    if (child == floating_nodes.end()) {
+        LOGE("Node not a direct child of ", this, ": ", node);
+        return nullptr;
+    }
+
+    return child->sublayer;
 }
 
 void Workspace::tile_request(Node const node, const bool tile) {
@@ -984,7 +1051,8 @@ void Workspace::tile_request(Node const node, const bool tile) {
 
     } else if (!node->get_floating() && !tile) {
         // Avoid untiling empty tiled root node.
-        if (node.get() == tiled_root.get() && tiled_root->children.size() == 0)
+        if (node.get() == tiled_root.node.get() &&
+            tiled_root.node->children.size() == 0)
             return;
 
         insert_floating_node(remove_tiled_node(node));
@@ -1000,16 +1068,16 @@ void Workspace::tile_request(Node const node, const bool tile) {
 }
 
 void Workspace::for_each_node(const std::function<void(Node)> &f) {
-    for (auto &node : floating_nodes) {
-        node->for_each_node(f);
+    for (auto &floating : floating_nodes) {
+        floating.node->for_each_node(f);
     }
-    tiled_root->for_each_node(f);
+    tiled_root.node->for_each_node(f);
 }
 
 Node Workspace::get_last_active_node() { return active_node; }
 
 Node Workspace::get_adjacent(Node node, Direction dir) {
-    if (node.get() == tiled_root.get()) {
+    if (node.get() == tiled_root.node.get()) {
         LOGE("No node is adjacent to root tiled node : ", node);
         return nullptr;
     } else {
@@ -1026,13 +1094,13 @@ Node Workspace::get_adjacent(Node node, Direction dir) {
     {                                                                          \
         auto closest =                                                         \
             std::min_element(fl.begin(), fl.end(), [&](auto &a, auto &b) {     \
-                if (a.get() == node.get())                                     \
+                if (a.node.get() == node.get())                                \
                     return false;                                              \
-                if (b.get() == node.get())                                     \
+                if (b.node.get() == node.get())                                \
                     return true;                                               \
                                                                                \
-                auto apoint = nonwf::geometry_center(a->get_geometry());       \
-                auto bpoint = nonwf::geometry_center(b->get_geometry());       \
+                auto apoint = nonwf::geometry_center(a.node->get_geometry());  \
+                auto bpoint = nonwf::geometry_center(b.node->get_geometry());  \
                                                                                \
                 if (center.axis cmp apoint.axis)                               \
                     return false;                                              \
@@ -1042,12 +1110,14 @@ Node Workspace::get_adjacent(Node node, Direction dir) {
                 return std::abs(center.axis - apoint.axis) <                   \
                        std::abs(center.axis - bpoint.axis);                    \
             });                                                                \
-        if (closest == fl.end() || (*closest).get() == node.get() ||           \
-            center.axis cmp nonwf::geometry_center((*closest)->get_geometry()) \
+        if (closest == fl.end() || closest->node.get() == node.get() ||        \
+            center                                                             \
+                .axis cmp nonwf::geometry_center(                              \
+                    closest->node->get_geometry())                             \
                 .axis)                                                         \
             return nullptr;                                                    \
         else                                                                   \
-            return (*closest).get();                                           \
+            return closest->node.get();                                        \
     }
         case Direction::LEFT:
             CLOSEST(x, <);

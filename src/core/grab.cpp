@@ -142,7 +142,7 @@ ActiveResize::construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged) {
 
         ret->root_node = ret->dragged->find_floating_parent();
         if (!ret->root_node)
-            ret->root_node = ret->dragged->get_ws()->tiled_root.get();
+            ret->root_node = ret->dragged->get_ws()->tiled_root.node.get();
 
         ret->root_node->begin_resize();
 

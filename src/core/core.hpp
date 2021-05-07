@@ -279,6 +279,13 @@ class INode : public virtual IDisplay {
     /// Set the workspace that manages this node.
     virtual void set_ws(WorkspaceRef ws) { this->ws = ws; };
 
+    /// Set the sublayer of views in the subtree starting at this node.
+    virtual void
+    set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) = 0;
+
+    /// Bring this node's whole tree to the foreground.
+    virtual void bring_to_front() = 0;
+
     /// Make this node the active selected node in its workspace.
     virtual void set_active();
 
@@ -288,6 +295,10 @@ class INode : public virtual IDisplay {
     /// Return self if this node is a parent or try to upgrade this node to
     /// become a parent or return the parent of this node.
     virtual NodeParent get_or_upgrade_to_parent_node() = 0;
+
+    /// Return this node if it's a direct child of its workspace or traverse the
+    /// tree upward to find the root parent node.
+    Node find_root_parent();
 
     /// Return this node if it's floating or traverse the tree upward to find a
     /// floating parent.
@@ -406,6 +417,8 @@ class ViewNode : public INode, public wf::signal_provider_t {
 
     void set_geometry(wf::geometry_t geo) override;
     void set_floating(bool fl) override;
+    void set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) override;
+    void bring_to_front() override;
     void set_active() override;
     NodeParent get_or_upgrade_to_parent_node() override;
     void for_each_node(const std::function<void(Node)> &f) override;
@@ -575,8 +588,8 @@ class SplitNode : public INode, public INodeParent {
     void begin_resize() override;
     void end_resize() override;
     void set_floating(bool fl) override;
-    // void set_active() override; // TODO: make set_active on split nodes raise
-    // its content to the front and unfocus any views.
+    void set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) override;
+    void bring_to_front() override;
     void set_ws(WorkspaceRef ws) override;
     NodeParent get_or_upgrade_to_parent_node() override;
     void for_each_node(const std::function<void(Node)> &f) override;
@@ -591,6 +604,16 @@ class SplitNode : public INode, public INodeParent {
 
 /// A single workspace managing a tiled tree and floating nodes.
 class Workspace : public INodeParent {
+  private:
+    /// The root node of a workspace layer.
+    template <typename N> struct WorkspaceRoot {
+        /// The owned root node.
+        std::unique_ptr<N> node;
+
+        /// The sublayer which holds all nodes in under this root.
+        nonstd::observer_ptr<wf::sublayer_t> sublayer;
+    };
+
   public:
     /// The workarea of this ws.
     ///
@@ -602,12 +625,12 @@ class Workspace : public INodeParent {
     wf::point_t wsid;
 
     /// The tiled tree that fills this workspace.
-    std::unique_ptr<SplitNode> tiled_root;
+    WorkspaceRoot<SplitNode> tiled_root;
 
     /// The floating nodes that are manages by this ws.
     ///
     /// All floating nodes are direct children of their workspace.
-    std::vector<OwnedNode> floating_nodes;
+    std::vector<WorkspaceRoot<INode>> floating_nodes;
 
     /// The Swayfire plugin that owns this workspace.
     nonstd::observer_ptr<Swayfire> plugin;
@@ -616,6 +639,8 @@ class Workspace : public INodeParent {
     OutputRef output;
 
   private:
+    using FloatingNodeIter = decltype(Workspace::floating_nodes)::iterator;
+
     /// Reference to the node currently active in this ws.
     Node active_node = nullptr;
 
@@ -623,7 +648,7 @@ class Workspace : public INodeParent {
     uint32_t active_floating = 0;
 
     /// Find a floating child of this ws.
-    NodeIter find_floating(Node node);
+    FloatingNodeIter find_floating(Node node);
 
     /// Handle workarea changes.
     wf::signal_connection_t on_workarea_changed = [&](wf::signal_data_t *data) {
@@ -656,6 +681,9 @@ class Workspace : public INodeParent {
 
     /// Get the workarea of the workspace.
     wf::geometry_t get_workarea() { return workarea; }
+
+    /// Get the sublayer of the direct child of this workspace.
+    nonstd::observer_ptr<wf::sublayer_t> get_child_sublayer(Node child);
 
     // == Floating ==
 
