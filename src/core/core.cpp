@@ -931,10 +931,17 @@ OwnedNode Workspace::remove_tiled_node(Node node, bool reset_active) {
         return nullptr;
     }
 
+    auto old_parent = node->parent;
     auto owned_node = node->parent->remove_child(node);
 
     if (reset_active && node.get() == active_node.get())
         reset_active_node();
+
+    if (auto sparent = old_parent->as_split_node())
+        if (sparent->children.empty() && sparent.get() != tiled_root.node.get())
+            // reset_active = true, since we're possibly destroying the removed
+            // node here.
+            (void)remove_node(sparent, true);
 
     return owned_node;
 }
