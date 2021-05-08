@@ -87,21 +87,7 @@ bool Swayfire::on_toggle_focus_tile(wf::keybinding_t) {
 }
 
 bool Swayfire::move_direction(Direction dir) {
-    auto ws = get_current_workspace();
-    auto active = ws->get_active_node();
-
-    auto old_parent = active->parent;
-    if (!active->parent->move_child(active, dir))
-        return false;
-
-    if (old_parent.get() != ws->tiled_root.node.get()) {
-        if (auto old_parent_split = old_parent->as_split_node()) {
-            old_parent_split->try_downgrade();
-        }
-    }
-
-    active->set_active();
-    return true;
+    return get_current_workspace()->get_active_node()->move(dir);
 }
 
 bool Swayfire::on_move_left(wf::keybinding_t) {

@@ -150,6 +150,8 @@ class INodeParent : public virtual IDisplay {
     /// slot in the given direction. The child may also be moved deeper into the
     /// tree if the adjacent node in the given direction is a split.
     ///
+    /// Prefer calling INode::move() which calls this method internally.
+    ///
     /// \return True if the child was moved.
     virtual bool move_child(Node node, Direction dir) = 0;
 
@@ -291,6 +293,13 @@ class INode : public virtual IDisplay {
 
     /// Try to (un)tile this node in its workspace.
     void tile_request(bool tile);
+
+    /// Move this node in the given direction within its tree.
+    /// 
+    /// See INodeParent::move_child() for in-depth behaviour.
+    ///
+    /// \return whether we were able to move in the given direction.
+    bool move(Direction dir);
 
     /// Return self if this node is a parent or try to upgrade this node to
     /// become a parent or return the parent of this node.

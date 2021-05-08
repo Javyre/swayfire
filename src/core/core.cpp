@@ -84,6 +84,26 @@ void INode::tile_request(const bool tile) {
     get_ws()->tile_request(this, tile);
 }
 
+bool INode::move(Direction dir) {
+    auto old_parent = parent;
+    if (!parent->move_child(this, dir))
+        return false;
+
+    if (old_parent.get() != get_ws()->tiled_root.node.get()) {
+        if (auto old_parent_split = old_parent->as_split_node()) {
+            if (old_parent_split->children.empty()) {
+                // reset_active = true, since we're possibly destroying the
+                // active node here.
+                (void)get_ws()->remove_node(old_parent_split, true);
+            } else {
+                old_parent_split->try_downgrade();
+            }
+        }
+    }
+
+    return true;
+}
+
 Node INode::find_root_parent() {
     if (auto psplit = parent->as_split_node())
         return psplit->find_root_parent();
@@ -183,12 +203,8 @@ ViewNode::~ViewNode() {
 void ViewNode::on_unmapped_impl() {
     // ws might get unset on remove_child so we must save it.
     auto ws = this->ws;
-    auto old_parent = parent;
 
     (void)ws->remove_node(this);
-    if (auto split = old_parent->as_split_node())
-        split->try_downgrade();
-
     // view node dies here.
 }
 
@@ -486,9 +502,7 @@ Node SplitNode::try_downgrade() {
         if (auto vnode = only_child->as_view_node())
             vnode->set_prefered_split_type(split_type);
 
-        bool was_active = false;
-        if (auto active = get_ws()->get_active_node())
-            was_active = active.get() == this;
+        bool was_active = get_ws()->get_active_node().get() == this;
 
         parent->swap_child(this, std::move(only_child));
 
@@ -937,11 +951,17 @@ OwnedNode Workspace::remove_tiled_node(Node node, bool reset_active) {
     if (reset_active && node.get() == active_node.get())
         reset_active_node();
 
-    if (auto sparent = old_parent->as_split_node())
-        if (sparent->children.empty() && sparent.get() != tiled_root.node.get())
-            // reset_active = true, since we're possibly destroying the removed
-            // node here.
-            (void)remove_node(sparent, true);
+    if (old_parent.get() != tiled_root.node.get()) {
+        if (auto sparent = old_parent->as_split_node()) {
+            if (sparent->children.empty()) {
+                // reset_active = true, since we're possibly destroying the
+                // active node here.
+                (void)remove_node(sparent, true);
+            } else if (sparent->children.front().node->as_view_node()) {
+                sparent->try_downgrade();
+            }
+        }
+    }
 
     return owned_node;
 }
