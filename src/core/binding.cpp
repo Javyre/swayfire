@@ -57,7 +57,9 @@ bool Swayfire::on_focus_up(wf::keybinding_t) {
 }
 
 bool focus_tiled(WorkspaceRef ws) {
-    if (auto tiled = ws->tiled_root.node->get_last_active_node()) {
+    auto tiled = ws->tiled_root.node->get_last_active_node();
+    if (!(tiled.get() == ws->tiled_root.node.get() &&
+          ws->tiled_root.node->children.empty())) {
         tiled->set_active();
         return true;
     }
@@ -66,13 +68,10 @@ bool focus_tiled(WorkspaceRef ws) {
 
 bool focus_floating(WorkspaceRef ws) {
     if (auto floating = ws->get_active_floating_node()) {
-        if (auto fsplit = floating->as_split_node()) {
-            if (auto last_active = fsplit->get_last_active_node()) {
-                last_active->set_active();
-                return true;
-            }
-        }
-        floating->set_active();
+        if (auto fsplit = floating->as_split_node())
+            fsplit->get_last_active_node()->set_active();
+        else
+            floating->set_active();
         return true;
     }
     return false;

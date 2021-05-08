@@ -539,12 +539,11 @@ OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
 
 Node SplitNode::get_last_active_node() {
     if (children.empty())
-        return nullptr;
+        return this;
 
     auto &child = children.at(active_child);
     if (auto split = child.node->as_split_node())
-        if (auto la = split->get_last_active_node())
-            return la;
+        return split->get_last_active_node();
 
     return child.node.get();
 }
@@ -753,8 +752,8 @@ void SplitNode::set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) {
 void SplitNode::bring_to_front() {
     // We just need to bring to front a single view in the sublayer to bring
     // them all to front.
-    if (auto active = get_last_active_node())
-        active->bring_to_front();
+    if (!children.empty())
+        children.at(active_child).node->bring_to_front();
 }
 
 void SplitNode::set_ws(WorkspaceRef ws) {
@@ -973,8 +972,6 @@ OwnedNode Workspace::remove_node(Node node, bool reset_active) {
 
 void Workspace::reset_active_node() {
     active_node = tiled_root.node->get_last_active_node();
-    if (!active_node)
-        active_node = tiled_root.node;
 }
 
 void Workspace::insert_child(OwnedNode node) {

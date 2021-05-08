@@ -167,7 +167,8 @@ class INodeParent : public virtual IDisplay {
 
     /// Get the deepest last active child node.
     ///
-    /// The returned node may be an indirect child of this parent.
+    /// The returned node may be an indirect child of this parent or even this
+    /// parent itself.
     virtual Node get_last_active_node() = 0;
 
     /// Insert a new direct child into this parent.
@@ -295,7 +296,7 @@ class INode : public virtual IDisplay {
     void tile_request(bool tile);
 
     /// Move this node in the given direction within its tree.
-    /// 
+    ///
     /// See INodeParent::move_child() for in-depth behaviour.
     ///
     /// \return whether we were able to move in the given direction.
