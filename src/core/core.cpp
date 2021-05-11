@@ -190,6 +190,10 @@ ViewNode::ViewNode(wayfire_view view) : view(view) {
 
 ViewNode::~ViewNode() {
     LOGD("Destroying ", this);
+    ViewNodeSignalData data = {};
+    data.node = this;
+    emit_signal("detached", &data);
+    get_ws()->output->emit_signal("swf-view-node-detached", &data);
 
     view->disconnect_signal(&on_geometry_changed);
     view->disconnect_signal(&on_unmapped);
