@@ -3,9 +3,7 @@
 // Decoration
 
 // TODO: damage only the region of the deco and not the whole bounding box.
-void ViewDecoration::damage() {
-    node->view->damage();
-}
+void ViewDecoration::damage() { node->view->damage(); }
 
 wf::geometry_t ViewDecoration::expand_wm_geometry(wf::geometry_t content) {
     // TODO: implement window titles in deco.
@@ -136,6 +134,9 @@ void SwayfireDeco::swf_init() {
     output->connect_signal("swf-view-node-attached", &on_view_node_attached);
 }
 
-void SwayfireDeco::swf_fini() { LOGD("=== deco fini ==="); }
+void SwayfireDeco::swf_fini() {
+    LOGD("=== deco fini ===");
+    output->disconnect_signal(&on_view_node_attached);
+}
 
 DECLARE_WAYFIRE_PLUGIN(SwayfireDeco)
