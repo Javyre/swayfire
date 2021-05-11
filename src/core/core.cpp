@@ -311,6 +311,21 @@ void ViewNode::bring_to_front() {
         v->damage();
 }
 
+void ViewNode::set_ws(WorkspaceRef ws) {
+    auto old_ws = get_ws();
+    INode::set_ws(ws);
+
+    if (!old_ws && ws) {
+        // It's probably dangerous to send out this signal and start changing
+        // unmapped views' geomtries.
+        assert(view->is_mapped());
+
+        ViewNodeSignalData data = {};
+        data.node = this;
+        ws->output->emit_signal("swf-view-node-attached", &data);
+    }
+}
+
 void ViewNode::set_active() {
     INode::set_active();
 
@@ -1236,10 +1251,6 @@ WorkspaceRef Swayfire::get_view_workspace(wayfire_view view,
 std::unique_ptr<ViewNode> Swayfire::init_view_node(wayfire_view view) {
     auto node = std::make_unique<ViewNode>(view);
     view->store_data<ViewData>(std::make_unique<ViewData>(node));
-
-    ViewNodeSignalData data = {};
-    data.node = node;
-    output->emit_signal("swf-view-node-attached", &data);
 
     LOGD("New view-node for ", view->to_string(), ": ", node.get());
     return node;

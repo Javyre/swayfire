@@ -113,16 +113,9 @@ class SwayfireDeco : public SwayfirePlugin {
 
     wf::signal_connection_t on_view_node_attached =
         [&](wf::signal_data_t *data) {
-            get_signaled_view_node(data)->view->connect_signal(
-                "mapped", &on_view_first_map);
+            auto vnode = get_signaled_view_node(data);
+            decorate_node(vnode);
         };
-
-    wf::signal_connection_t on_view_first_map = [&](wf::signal_data_t *data) {
-        decorate_node(get_signaled_view_node(data));
-
-        get_signaled_view_node(data)->view->disconnect_signal(
-            &on_view_first_map);
-    };
 
     Options options{};
 

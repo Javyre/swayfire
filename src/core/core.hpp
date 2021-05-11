@@ -429,6 +429,7 @@ class ViewNode : public INode, public wf::signal_provider_t {
     void set_floating(bool fl) override;
     void set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) override;
     void bring_to_front() override;
+    void set_ws(WorkspaceRef ws) override;
     void set_active() override;
     NodeParent get_or_upgrade_to_parent_node() override;
     void for_each_node(const std::function<void(Node)> &f) override;
