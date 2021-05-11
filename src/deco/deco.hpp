@@ -56,6 +56,8 @@ class ViewDecoration : public wf::compositor_surface_t,
   private:
     const ViewNodeRef node; ///< The node we're decorating.
 
+    bool mapped = true;
+
     /// The loaded options from the cfg.
     nonstd::observer_ptr<Options> options;
 
@@ -69,11 +71,18 @@ class ViewDecoration : public wf::compositor_surface_t,
     wf::signal_connection_t on_prefered_split_type_changed =
         [&](wf::signal_data_t *) { damage(); };
 
+    wf::signal_connection_t on_detached = [&](wf::signal_data_t *) {
+        mapped = false;
+        wf::emit_map_state_change(this);
+        node->view->set_decoration(nullptr);
+    };
+
   public:
     ViewDecoration(ViewNodeRef node, nonstd::observer_ptr<Options> options)
         : node(node), options(options) {
         node->connect_signal("prefered-split-type-changed",
                              &on_prefered_split_type_changed);
+        node->connect_signal("detached", &on_detached);
     }
 
     /// Damage the decoration region.

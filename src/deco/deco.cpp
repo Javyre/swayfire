@@ -37,7 +37,7 @@ void ViewDecoration::notify_view_resized(wf::geometry_t view_geometry) {
     node->view->damage();
 }
 
-bool ViewDecoration::is_mapped() const { return true; }
+bool ViewDecoration::is_mapped() const { return mapped; }
 
 wf::point_t ViewDecoration::get_offset() {
     return {-options->border_width, -options->border_width};
