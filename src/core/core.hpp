@@ -362,7 +362,6 @@ class ViewNode : public INode, public wf::signal_provider_t {
             floating_geometry = view->get_wm_geometry();
     };
 
-    // TODO: don't kill viewnodes on view unmap
     /// Handle unmapped views.
     wf::signal_connection_t on_unmapped = [&](wf::signal_data_t *) {
         // can't inline it here since depends on ws methods.
@@ -944,6 +943,20 @@ class Swayfire : public wf::plugin_interface_t {
              view->get_title());
 
         ws->insert_tiled_node(init_view_node(view));
+    };
+
+    /// Handle (un)minimized views.
+    wf::signal_connection_t on_view_minimized = [&](wf::signal_data_t *data) {
+        auto minimizing =
+            dynamic_cast<wf::view_minimize_request_signal *>(data)->state;
+        if (minimizing) {
+            if (auto vnode = get_signaled_view_node(data)) {
+                (void)vnode->get_ws()->remove_node(vnode);
+                // view node dies here.
+            }
+        } else {
+            on_view_attached.emit(data);
+        }
     };
 
   public:
