@@ -180,6 +180,9 @@ class INodeParent : public virtual IDisplay {
     /// Swap a direct child of this parent with some other node.
     virtual OwnedNode swap_child(Node node, OwnedNode other) = 0;
 
+    /// Swap two direct children of this parent.
+    virtual void swap_children(Node a, Node b) = 0;
+
     /// Set the last active direct child of this parent and set this parent to
     /// be the last active child of its parent.
     ///
@@ -593,6 +596,7 @@ class SplitNode : public INode, public INodeParent {
     void insert_child(OwnedNode node) override;
     OwnedNode remove_child(Node node) override;
     OwnedNode swap_child(Node node, OwnedNode other) override;
+    void swap_children(Node a, Node b) override;
     void set_active_child(Node node) override;
 
     // == INode impl ==
@@ -759,6 +763,7 @@ class Workspace : public INodeParent {
     void insert_child(OwnedNode node) override;
     OwnedNode remove_child(Node node) override;
     OwnedNode swap_child(Node node, OwnedNode other) override;
+    void swap_children(Node a, Node b) override;
     void set_active_child(Node node) override;
 
     // == IDisplay impl ==

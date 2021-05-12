@@ -560,6 +560,19 @@ OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
     return other;
 }
 
+void SplitNode::swap_children(Node a, Node b) {
+    auto child_a = find_child(a);
+    if (child_a == children.end())
+        LOGE("Node ", a, " not found in split node: ", this);
+
+    auto child_b = find_child(b);
+    if (child_b == children.end())
+        LOGE("Node ", b, " not found in split node: ", this);
+
+    std::iter_swap(child_a, child_b);
+    refresh_geometry();
+}
+
 Node SplitNode::get_last_active_node() {
     if (children.empty())
         return this;
@@ -706,7 +719,7 @@ bool SplitNode::move_child(Node node, Direction dir) {
                 }                                                              \
             }                                                                  \
             auto const prev = child[-1].node.get();                            \
-            insert_child_front_of(prev, remove_child_at(child));               \
+            swap_children(child[0].node.get(), prev);                          \
             return true;                                                       \
         }                                                                      \
     }
@@ -726,7 +739,7 @@ bool SplitNode::move_child(Node node, Direction dir) {
                 }                                                              \
             }                                                                  \
             auto const next = child[1].node.get();                             \
-            insert_child_back_of(next, remove_child_at(child));                \
+            swap_children(child[0].node.get(), next);                          \
             return true;                                                       \
         }                                                                      \
     }
@@ -1039,6 +1052,42 @@ OwnedNode Workspace::swap_child(Node node, OwnedNode other) {
     } else {
         LOGE("Node is not a direct child of ", this, ": ", node);
         return nullptr;
+    }
+}
+
+void Workspace::swap_children(Node a, Node b) {
+    if (a->get_floating() && b->get_floating()) {
+        auto tmp = a->get_geometry();
+        a->set_geometry(b->get_geometry());
+        b->set_geometry(tmp);
+    } else {
+        if (b->get_floating())
+            std::swap(a, b);
+        assert(a->get_floating());
+
+        if (b.get() != tiled_root.node.get()) {
+            LOGE("Node is not a direct child of ", this, ": ", b);
+            return;
+        }
+
+        auto old_floating_geo = a->get_geometry();
+
+        auto owned_a = remove_floating_node(a);
+        std::unique_ptr<SplitNode> old_root;
+
+        if (auto asplit = owned_a->as_split_node()) {
+            old_root = swap_tiled_root(
+                std::unique_ptr<SplitNode>((SplitNode *)owned_a.release()));
+        } else {
+            old_root = std::unique_ptr<SplitNode>(
+                (SplitNode *)remove_child(tiled_root.node.get()).release());
+            insert_tiled_node(std::move(owned_a));
+        }
+
+        auto old_root_ref = old_root.get();
+        insert_floating_node(std::move(old_root));
+
+        old_root_ref->set_geometry(old_floating_geo);
     }
 }
 
