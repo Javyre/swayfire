@@ -941,7 +941,8 @@ Node Workspace::get_active_floating_node() {
     return floating_nodes.at(active_floating).node.get();
 }
 
-OwnedNode Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
+std::unique_ptr<SplitNode>
+Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
     auto ret = std::move(tiled_root.node);
 
     tiled_root.node = std::move(other);

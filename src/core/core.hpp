@@ -729,7 +729,8 @@ class Workspace : public INodeParent {
     OwnedNode remove_tiled_node(Node node, bool reset_active = true);
 
     /// Swap the root tiled split node with another.
-    OwnedNode swap_tiled_root(std::unique_ptr<SplitNode> other);
+    std::unique_ptr<SplitNode>
+    swap_tiled_root(std::unique_ptr<SplitNode> other);
 
     // == Both ==
 
