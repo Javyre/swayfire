@@ -876,7 +876,7 @@ void Workspace::insert_floating_node(OwnedNode node) {
     node->set_floating(true);
     node->set_ws(this);
     auto layer = output->workspace->create_sublayer(wf::LAYER_WORKSPACE,
-                                                    wf::SUBLAYER_FLOATING);
+                                                    wf::SUBLAYER_DOCKED_ABOVE);
     node->set_sublayer(layer);
 
     floating_nodes.push_back({std::move(node), layer});
