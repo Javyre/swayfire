@@ -74,6 +74,16 @@ SplitNodeRef INode::as_split_node() { return dynamic_cast<SplitNode *>(this); }
 
 ViewNodeRef INode::as_view_node() { return dynamic_cast<ViewNode *>(this); }
 
+void INode::set_floating(bool fl) {
+    if (!floating && fl)
+        set_geometry(floating_geometry);
+
+    if (floating && !fl)
+        floating_geometry = get_geometry();
+
+    floating = fl;
+};
+
 void INode::set_active() {
     parent->set_active_child(this);
     ws->set_active_node(this);
@@ -238,13 +248,7 @@ void ViewNode::on_geometry_changed_impl() {
 }
 
 void ViewNode::set_floating(bool fl) {
-    if (!floating && fl)
-        set_geometry(floating_geometry);
-
-    if (floating && !fl)
-        floating_geometry = get_geometry();
-
-    floating = fl;
+    INode::set_floating(fl);
     view->set_tiled(fl ? 0 : wf::TILED_EDGES_ALL);
 }
 
@@ -760,8 +764,6 @@ bool SplitNode::move_child(Node node, Direction dir) {
 #undef MOVE_FORWARD
 #undef MOVE_BACK
 }
-
-void SplitNode::set_floating(bool fl) { floating = fl; }
 
 void SplitNode::set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) {
     for (auto &child : children)

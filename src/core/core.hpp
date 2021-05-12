@@ -203,6 +203,9 @@ class INode : public virtual IDisplay {
     /// children.
     bool floating = false;
 
+    /// The last floating geometry of this node.
+    wf::geometry_t floating_geometry;
+
     WorkspaceRef ws = nullptr; ///< The workspace by which this node is managed.
     wf::geometry_t geometry;   ///< The outer geometry of this node.
     uint node_id;              ///< The id of this node.
@@ -274,7 +277,7 @@ class INode : public virtual IDisplay {
     bool get_floating() { return floating; };
 
     /// Set whether this node is floating.
-    virtual void set_floating(bool fl) = 0;
+    virtual void set_floating(bool fl);
 
     /// Get the workspace that manages this node.
     WorkspaceRef get_ws() { return ws; };
@@ -397,9 +400,6 @@ class ViewNode : public INode, public wf::signal_provider_t {
   public:
     /// The wayfire view corresponding to this node.
     wayfire_view view;
-
-    /// The last floating geometry of this node.
-    wf::geometry_t floating_geometry;
 
     /// The geo enforcer transformer attached to the view.
     nonstd::observer_ptr<ViewGeoEnforcer> geo_enforcer;
@@ -537,7 +537,10 @@ class SplitNode : public INode, public INodeParent {
     uint32_t active_child = 0;                ///< Index of last active child.
     std::vector<SplitChild> children;         ///< The direct children nodes.
 
-    SplitNode(wf::geometry_t geo) { geometry = geo; }
+    SplitNode(wf::geometry_t geo) {
+        geometry = geo;
+        floating_geometry = geo;
+    }
 
     /// Return whether this is a v/h-split.
     bool is_split() {
@@ -597,7 +600,6 @@ class SplitNode : public INode, public INodeParent {
     void set_geometry(wf::geometry_t geo) override;
     void begin_resize() override;
     void end_resize() override;
-    void set_floating(bool fl) override;
     void set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) override;
     void bring_to_front() override;
     void set_ws(WorkspaceRef ws) override;
