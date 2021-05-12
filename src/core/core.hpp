@@ -639,6 +639,9 @@ class Workspace : public INodeParent {
     /// The tiled tree that fills this workspace.
     WorkspaceRoot<SplitNode> tiled_root;
 
+    /// The sublayer which holds all floating nodes in this workspace.
+    nonstd::observer_ptr<wf::sublayer_t> floating_sublayer;
+
     /// The floating nodes that are manages by this ws.
     ///
     /// All floating nodes are direct children of their workspace.

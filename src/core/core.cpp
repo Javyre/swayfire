@@ -87,7 +87,7 @@ void INode::set_floating(bool fl) {
 void INode::set_active() {
     parent->set_active_child(this);
     ws->set_active_node(this);
-    bring_to_front();
+    find_root_parent()->bring_to_front();
 }
 
 void INode::tile_request(const bool tile) {
@@ -771,10 +771,8 @@ void SplitNode::set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) {
 }
 
 void SplitNode::bring_to_front() {
-    // We just need to bring to front a single view in the sublayer to bring
-    // them all to front.
-    if (!children.empty())
-        children.at(active_child).node->bring_to_front();
+    for (auto &child : children)
+        child.node->bring_to_front();
 }
 
 void SplitNode::set_ws(WorkspaceRef ws) {
@@ -861,10 +859,16 @@ Workspace::Workspace(wf::point_t wsid, wf::geometry_t geo,
     LOGD("ws created with root ", tiled_root.node->to_string());
     active_node = tiled_root.node;
 
+    floating_sublayer = output->workspace->create_sublayer(
+        wf::LAYER_WORKSPACE, wf::SUBLAYER_DOCKED_ABOVE);
+
     output->connect_signal("workarea-changed", &on_workarea_changed);
 }
 
-Workspace::~Workspace() { output->disconnect_signal(&on_workarea_changed); }
+Workspace::~Workspace() {
+    output->disconnect_signal(&on_workarea_changed);
+    output->workspace->destroy_sublayer(floating_sublayer);
+}
 
 void Workspace::set_active_node(Node node) { active_node = node; }
 
@@ -877,11 +881,9 @@ void Workspace::insert_floating_node(OwnedNode node) {
     node->parent = this;
     node->set_floating(true);
     node->set_ws(this);
-    auto layer = output->workspace->create_sublayer(wf::LAYER_WORKSPACE,
-                                                    wf::SUBLAYER_DOCKED_ABOVE);
-    node->set_sublayer(layer);
+    node->set_sublayer(floating_sublayer);
 
-    floating_nodes.push_back({std::move(node), layer});
+    floating_nodes.push_back({std::move(node), floating_sublayer});
 }
 
 Workspace::FloatingNodeIter Workspace::find_floating(Node node) {
@@ -897,7 +899,6 @@ OwnedNode Workspace::remove_floating_node(Node node, bool reset_active) {
     }
 
     auto owned_node = std::move(child->node);
-    output->workspace->destroy_sublayer(child->sublayer);
 
     floating_nodes.erase(child);
 
