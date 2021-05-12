@@ -867,6 +867,7 @@ Workspace::Workspace(wf::point_t wsid, wf::geometry_t geo,
 
 Workspace::~Workspace() {
     output->disconnect_signal(&on_workarea_changed);
+    output->workspace->destroy_sublayer(tiled_root.sublayer);
     output->workspace->destroy_sublayer(floating_sublayer);
 }
 
