@@ -69,8 +69,10 @@ void ViewDecoration::simple_render(const wf::framebuffer_t &fb, int x, int y,
     int radius = options->border_radius;
     int bw = options->border_width;
 
+    const wf::region_t region = cached_region + wf::point_t{x, y};
+
     OpenGL::render_begin(fb);
-    for (auto scissor : damage) {
+    for (const auto &scissor : region & damage) {
         fb.logic_scissor(wlr_box_from_pixman_box(scissor));
 
         // left side
