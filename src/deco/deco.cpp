@@ -2,6 +2,17 @@
 
 // Decoration
 
+wf::region_t ViewDecoration::calculate_region() {
+    wf::region_t region{};
+
+    region |= wf::geometry_t{0, 0, width, height};
+    region ^= wf::geometry_t{options->border_width, options->border_width,
+                             width - 2 * options->border_width,
+                             height - 2 * options->border_width};
+
+    return region;
+}
+
 // TODO: damage only the region of the deco and not the whole bounding box.
 void ViewDecoration::damage() { node->view->damage(); }
 
@@ -32,6 +43,7 @@ void ViewDecoration::notify_view_resized(wf::geometry_t view_geometry) {
     node->view->damage();
     width = view_geometry.width;
     height = view_geometry.height;
+    cached_region = calculate_region();
     node->view->damage();
 }
 
@@ -42,6 +54,11 @@ wf::point_t ViewDecoration::get_offset() {
 }
 
 wf::dimensions_t ViewDecoration::get_size() const { return {width, height}; }
+
+bool ViewDecoration::accepts_input(int32_t sx, int32_t sy) {
+    return pixman_region32_contains_point(cached_region.to_pixman(), sx, sy,
+                                          nullptr);
+}
 
 void ViewDecoration::simple_render(const wf::framebuffer_t &fb, int x, int y,
                                    const wf::region_t &damage) {

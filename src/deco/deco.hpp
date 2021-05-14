@@ -68,6 +68,11 @@ class ViewDecoration : public wf::compositor_surface_t,
     int width = 0;  ///< Width of the decoration.
     int height = 0; ///< Height of the decoration.
 
+    wf::region_t cached_region; ///< Cached minimal region containing this deco.
+
+    /// Calculate the minimal region that contains this decoration surface.
+    wf::region_t calculate_region();
+
     wf::signal_connection_t on_prefered_split_type_changed =
         [&](wf::signal_data_t *) { damage(); };
 
@@ -83,6 +88,8 @@ class ViewDecoration : public wf::compositor_surface_t,
         node->connect_signal("prefered-split-type-changed",
                              &on_prefered_split_type_changed);
         node->connect_signal("detached", &on_detached);
+
+        cached_region = calculate_region();
     }
 
     /// Damage the decoration region.
@@ -102,6 +109,7 @@ class ViewDecoration : public wf::compositor_surface_t,
     bool is_mapped() const override;
     wf::point_t get_offset() override;
     wf::dimensions_t get_size() const override;
+    bool accepts_input(int32_t sx, int32_t sy) override;
     void simple_render(const wf::framebuffer_t &fb, int x, int y,
                        const wf::region_t &damage) override;
 };
