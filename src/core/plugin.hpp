@@ -18,6 +18,9 @@ struct SwayfireCustomData : public wf::custom_data_t {
 /// Utilities for swayfire plugins loaded through swayfire.
 class SwayfirePlugin : public wf::plugin_interface_t {
   private:
+    /// Whether swf_fini() was run yet.
+    bool has_finished = false;
+
     wf::signal_connection_t on_swayfire_init = [&](wf::signal_data_t *) {
         swayfire =
             output->get_data<SwayfireCustomData>("swayfire-core")->swayfire;
@@ -25,7 +28,9 @@ class SwayfirePlugin : public wf::plugin_interface_t {
     };
 
     wf::signal_connection_t on_swayfire_fini = [&](wf::signal_data_t *) {
+        assert(!has_finished);
         swf_fini();
+        has_finished = true;
     };
 
   public:
@@ -48,7 +53,10 @@ class SwayfirePlugin : public wf::plugin_interface_t {
 
         output->connect_signal("swf-fini", &on_swayfire_fini);
     }
-    void fini() final {}
+    void fini() final {
+        if (!has_finished)
+            on_swayfire_fini.emit(nullptr);
+    }
 };
 
 #endif // SWAYFIRE_PLUGIN_HPP
