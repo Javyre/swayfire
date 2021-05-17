@@ -29,6 +29,8 @@ class SwayfirePlugin : public wf::plugin_interface_t {
 
     wf::signal_connection_t on_swayfire_fini = [&](wf::signal_data_t *) {
         assert(!has_finished);
+        output->disconnect_signal(&on_swayfire_init);
+        output->disconnect_signal(&on_swayfire_fini);
         swf_fini();
         has_finished = true;
     };

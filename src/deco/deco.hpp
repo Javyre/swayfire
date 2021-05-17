@@ -205,7 +205,7 @@ class ViewDecoration : public wf::compositor_surface_t,
     wf::signal_connection_t on_detached = [&](wf::signal_data_t *) {
         mapped = false;
         wf::emit_map_state_change(this);
-        node->view->set_decoration(nullptr);
+        node->view->set_decoration(nullptr); // ViewDecoration dies here.
     };
 
   public:
@@ -218,6 +218,12 @@ class ViewDecoration : public wf::compositor_surface_t,
         node->get_ws()->output->connect_signal("swf-deco-fini", &on_detached);
 
         cached_region = calculate_region();
+    }
+
+    ~ViewDecoration() override {
+        node->get_ws()->output->disconnect_signal(&on_detached);
+        node->disconnect_signal(&on_detached);
+        node->disconnect_signal(&on_prefered_split_type_changed);
     }
 
     /// Damage the decoration region.
