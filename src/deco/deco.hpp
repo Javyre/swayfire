@@ -211,9 +211,11 @@ class ViewDecoration : public wf::compositor_surface_t,
   public:
     ViewDecoration(ViewNodeRef node, nonstd::observer_ptr<Options> options)
         : node(node), options(options) {
+
         node->connect_signal("prefered-split-type-changed",
                              &on_prefered_split_type_changed);
         node->connect_signal("detached", &on_detached);
+        node->get_ws()->output->connect_signal("swf-deco-fini", &on_detached);
 
         cached_region = calculate_region();
     }

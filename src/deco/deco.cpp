@@ -110,6 +110,7 @@ void SwayfireDeco::swf_init() {
 
 void SwayfireDeco::swf_fini() {
     LOGD("=== deco fini ===");
+    output->emit_signal("swf-deco-fini", nullptr);
     output->disconnect_signal(&on_view_node_attached);
 
     subsurf_gl_fini();
