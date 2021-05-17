@@ -9,5 +9,5 @@ all_src += files([
 
 pms = shared_module('swayfire-deco', plugin_src,
     cpp_pch: ['../pch/prefix.hpp'],
-    dependencies: [wayfire, wlroots],
+    dependencies: [wayfire, wlroots, pixman],
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
