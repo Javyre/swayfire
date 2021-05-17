@@ -1,10 +1,12 @@
 plugin_src = files([
     'deco.cpp',
+    'subsurf.cpp',
 ])
 
 all_src += plugin_src
 all_src += files([
     'deco.hpp',
+    'subsurf.hpp',
 ])
 
 pms = shared_module('swayfire-deco', plugin_src,

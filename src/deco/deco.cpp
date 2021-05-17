@@ -3,12 +3,10 @@
 // Decoration
 
 wf::region_t ViewDecoration::calculate_region() {
-    wf::region_t region{};
+    wf::region_t region;
 
-    region |= wf::geometry_t{0, 0, width, height};
-    region ^= wf::geometry_t{options->border_width, options->border_width,
-                             width - 2 * options->border_width,
-                             height - 2 * options->border_width};
+    for (const auto &ss : subsurfs)
+        region |= ss->calculate_region();
 
     return region;
 }
@@ -56,69 +54,24 @@ wf::point_t ViewDecoration::get_offset() {
 wf::dimensions_t ViewDecoration::get_size() const { return {width, height}; }
 
 bool ViewDecoration::accepts_input(int32_t sx, int32_t sy) {
-    return pixman_region32_contains_point(cached_region.to_pixman(), sx, sy,
-                                          nullptr);
+    for (const auto &ss : subsurfs)
+        if (ss->contains_point({sx, sy}))
+            return true;
+    return false;
 }
 
 void ViewDecoration::simple_render(const wf::framebuffer_t &fb, int x, int y,
                                    const wf::region_t &damage) {
-    auto split_type = node->get_prefered_split_type();
-
-    wf::color_t border_color = colors->child_border;
-    wf::color_t indi_color = colors->indicator;
-    int radius = options->border_radius;
-    int bw = options->border_width;
-
     const wf::region_t region = cached_region + wf::point_t{x, y};
 
     OpenGL::render_begin(fb);
-    for (const auto &scissor : region & damage) {
+    for (const auto &scissor : region &damage) {
         fb.logic_scissor(wlr_box_from_pixman_box(scissor));
 
-        // left side
-        OpenGL::render_rectangle(
-            {
-                x,
-                y + radius,
-                bw,
-                height - (2 * radius),
-            },
-            border_color, fb.get_orthographic_projection());
-
-        // right side
-        OpenGL::render_rectangle(
-            {
-                x + width - bw,
-                y + radius,
-                bw,
-                height - (2 * radius),
-            },
-            split_type == SplitType::VSPLIT ? indi_color : border_color,
-            fb.get_orthographic_projection());
-
-        // top side
-        OpenGL::render_rectangle(
-            {
-                x + radius,
-                y,
-                width - (2 * radius),
-                bw,
-            },
-            border_color, fb.get_orthographic_projection());
-
-        // bottom side
-        OpenGL::render_rectangle(
-            {
-                x + radius,
-                y + height - bw,
-                width - (2 * radius),
-                bw,
-            },
-            split_type == SplitType::HSPLIT ? indi_color : border_color,
-            fb.get_orthographic_projection());
-
-        // render corners
+        for (const auto &ss : subsurfs)
+            ss->render({x, y}, fb.get_orthographic_projection());
     }
+
     OpenGL::render_end();
 }
 
@@ -146,6 +99,8 @@ void SwayfireDeco::swf_init() {
     if (!output->activate_plugin(grab_interface))
         LOGE("Swayfire-deco capability grab failed.");
 
+    subsurf_gl_init();
+
     swayfire->workspaces.for_each([&](WorkspaceRef ws) {
         ws->for_each_node([&](Node n) { decorate_node(n); });
     });
@@ -156,6 +111,8 @@ void SwayfireDeco::swf_init() {
 void SwayfireDeco::swf_fini() {
     LOGD("=== deco fini ===");
     output->disconnect_signal(&on_view_node_attached);
+
+    subsurf_gl_fini();
 }
 
 DECLARE_WAYFIRE_PLUGIN(SwayfireDeco)
