@@ -106,6 +106,9 @@ void SwayfireDeco::swf_init() {
     });
 
     output->connect_signal("swf-view-node-attached", &on_view_node_attached);
+
+    options.set_callback(
+        [&] { output->emit_signal("swf-deco-config-changed", nullptr); });
 }
 
 void SwayfireDeco::swf_fini() {

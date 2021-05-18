@@ -14,6 +14,14 @@
 struct DecorationColors {
     wf::option_wrapper_t<wf::color_t> border, background, text, indicator,
         child_border;
+
+    /// Set a callback to execute when the option values change.
+    void set_callback(const std::function<void()> &cb) {
+        border.set_callback(cb);
+        background.set_callback(cb);
+        text.set_callback(cb);
+        indicator.set_callback(cb);
+    }
 };
 
 struct Options {
@@ -49,6 +57,17 @@ struct Options {
 
         // TODO: implement other i3 class colors
     } colors;
+
+    /// Set a callback to execute when the option values change.
+    void set_callback(const std::function<void()> &cb) {
+        border_width.set_callback(cb);
+        border_radius.set_callback(cb);
+        title_bar.set_callback(cb);
+
+        colors.focused.set_callback(cb);
+        colors.focused_inactive.set_callback(cb);
+        colors.unfocused.set_callback(cb);
+    }
 };
 
 class ViewDecoration : public wf::compositor_surface_t,
@@ -202,6 +221,17 @@ class ViewDecoration : public wf::compositor_surface_t,
     wf::signal_connection_t on_prefered_split_type_changed =
         [&](wf::signal_data_t *) { damage(); };
 
+    wf::signal_connection_t on_config_changed = [&](wf::signal_data_t *) {
+        // Refresh geometry in case border_width changes.
+        node->refresh_geometry();
+
+        // Refreshing the geometry may not actually change the geometry. (e.g.
+        // If only border_radius changes) So we still need to update the
+        // cached_region here.
+        cached_region = calculate_region();
+        node->view->damage();
+    };
+
     wf::signal_connection_t on_detached = [&](wf::signal_data_t *) {
         mapped = false;
         wf::emit_map_state_change(this);
@@ -220,13 +250,19 @@ class ViewDecoration : public wf::compositor_surface_t,
         node->connect_signal("prefered-split-type-changed",
                              &on_prefered_split_type_changed);
         node->connect_signal("detached", &on_detached);
-        node->get_ws()->output->connect_signal("swf-deco-fini", &on_detached);
+
+        const auto output = node->get_ws()->output;
+        output->connect_signal("swf-deco-fini", &on_detached);
+        output->connect_signal("swf-deco-config-changed", &on_config_changed);
 
         cached_region = calculate_region();
     }
 
     ~ViewDecoration() override {
-        node->get_ws()->output->disconnect_signal(&on_detached);
+        const auto output = node->get_ws()->output;
+        output->disconnect_signal(&on_config_changed);
+        output->disconnect_signal(&on_detached);
+
         node->disconnect_signal(&on_detached);
         node->disconnect_signal(&on_prefered_split_type_changed);
     }
