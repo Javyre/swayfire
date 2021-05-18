@@ -206,6 +206,11 @@ class ViewDecoration : public wf::compositor_surface_t,
         mapped = false;
         wf::emit_map_state_change(this);
         node->view->set_decoration(nullptr); // ViewDecoration dies here.
+
+        // TODO: remove this code when
+        // https://github.com/WayfireWM/wayfire/pull/1187 gets released.
+        // This shouldn't be done here but in wayfire itself.
+        node->refresh_geometry();
     };
 
   public:
