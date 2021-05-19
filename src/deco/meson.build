@@ -9,7 +9,10 @@ all_src += files([
     'subsurf.hpp',
 ])
 
-pms = shared_module('swayfire-deco', plugin_src,
+swayfire_deco = shared_module('swayfire-deco', plugin_src,
     cpp_pch: ['../pch/prefix.hpp'],
     dependencies: [wayfire, wlroots, pixman],
-    install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
+    link_with: swayfire_core,
+    install_rpath: get_option('prefix') / get_option('libdir') / 'wayfire',
+    install: true, 
+    install_dir: get_option('libdir') / 'wayfire')

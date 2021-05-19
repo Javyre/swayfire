@@ -11,7 +11,7 @@ all_src += files([
     'core.hpp',
 ])
 
-pms = shared_module('swayfire', plugin_src,
+swayfire_core = shared_module('swayfire', plugin_src,
     cpp_pch: ['../pch/prefix.hpp'],
     dependencies: [wayfire, wlroots],
     install: true, install_dir: join_paths(get_option('libdir'), 'wayfire'))
