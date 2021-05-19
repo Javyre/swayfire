@@ -37,6 +37,8 @@ void ViewDecoration::notify_view_activated(bool active) {
     damage();
 }
 
+// NOTE: This also gets called when first decorating the view, so this is when
+// we first properly get notified of its geometry and initialize cached_region.
 void ViewDecoration::notify_view_resized(wf::geometry_t view_geometry) {
     node->view->damage();
     width = view_geometry.width;

@@ -254,8 +254,6 @@ class ViewDecoration : public wf::compositor_surface_t,
         const auto output = node->get_ws()->output;
         output->connect_signal("swf-deco-fini", &on_detached);
         output->connect_signal("swf-deco-config-changed", &on_config_changed);
-
-        cached_region = calculate_region();
     }
 
     ~ViewDecoration() override {
