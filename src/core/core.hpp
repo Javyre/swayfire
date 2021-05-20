@@ -493,6 +493,10 @@ using SplitChildIter = std::vector<SplitChild>::iterator;
 /// A split node containing children.
 class SplitNode : public INode, public INodeParent {
   private:
+    SplitType split_type;             ///< The split type of this node.
+    uint32_t active_child = 0;        ///< Index of last active child.
+    std::vector<SplitChild> children; ///< The direct children nodes.
+
     /// Find a direct child of this parent node.
     SplitChildIter find_child(Node node);
 
@@ -536,14 +540,17 @@ class SplitNode : public INode, public INodeParent {
                                       bool use_preferred_sizes = false);
 
   public:
-    SplitType split_type = SplitType::VSPLIT; ///< The split type of this node.
-    uint32_t active_child = 0;                ///< Index of last active child.
-    std::vector<SplitChild> children;         ///< The direct children nodes.
-
-    SplitNode(wf::geometry_t geo) {
+    SplitNode(wf::geometry_t geo, SplitType split_type = SplitType::VSPLIT)
+        : split_type(split_type) {
         geometry = geo;
         floating_geometry = geo;
     }
+
+    /// Return whether this split contains no children.
+    bool empty() { return children.empty(); }
+
+    /// Get a child of this split by index.
+    Node child_at(std::size_t i) { return children.at(i).node.get(); }
 
     /// Return whether this is a v/h-split.
     bool is_split() {

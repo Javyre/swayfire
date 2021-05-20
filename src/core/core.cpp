@@ -101,7 +101,7 @@ bool INode::move(Direction dir) {
 
     if (old_parent.get() != get_ws()->tiled_root.node.get()) {
         if (auto old_parent_split = old_parent->as_split_node()) {
-            if (old_parent_split->children.empty()) {
+            if (old_parent_split->empty()) {
                 // reset_active = true, since we're possibly destroying the
                 // active node here.
                 (void)get_ws()->remove_node(old_parent_split, true);
@@ -272,9 +272,9 @@ void ViewNode::set_geometry(wf::geometry_t geo) {
 
 SplitNodeRef ViewNode::try_upgrade() {
     if (auto split_type = get_prefered_split_type()) {
-        auto new_parent = std::make_unique<SplitNode>(get_geometry());
+        auto new_parent =
+            std::make_unique<SplitNode>(get_geometry(), *split_type);
         auto new_parent_ref = new_parent.get();
-        new_parent->split_type = *split_type;
         auto owned_self = parent->swap_child(this, std::move(new_parent));
         owned_self->set_floating(false);
         new_parent_ref->insert_child_back(std::move(owned_self));
@@ -989,11 +989,11 @@ OwnedNode Workspace::remove_tiled_node(Node node, bool reset_active) {
 
     if (old_parent.get() != tiled_root.node.get()) {
         if (auto sparent = old_parent->as_split_node()) {
-            if (sparent->children.empty()) {
+            if (sparent->empty()) {
                 // reset_active = true, since we're possibly destroying the
                 // active node here.
                 (void)remove_node(sparent, true);
-            } else if (sparent->children.front().node->as_view_node()) {
+            } else if (sparent->child_at(0)->as_view_node()) {
                 sparent->try_downgrade();
             }
         }
@@ -1148,8 +1148,7 @@ void Workspace::tile_request(Node const node, const bool tile) {
 
     } else if (!node->get_floating() && !tile) {
         // Avoid untiling empty tiled root node.
-        if (node.get() == tiled_root.node.get() &&
-            tiled_root.node->children.size() == 0)
+        if (node.get() == tiled_root.node.get() && tiled_root.node->empty())
             return;
 
         insert_floating_node(remove_tiled_node(node));

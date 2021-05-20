@@ -59,7 +59,7 @@ bool Swayfire::on_focus_up(wf::keybinding_t) {
 bool focus_tiled(WorkspaceRef ws) {
     auto tiled = ws->tiled_root.node->get_last_active_node();
     if (!(tiled.get() == ws->tiled_root.node.get() &&
-          ws->tiled_root.node->children.empty())) {
+          ws->tiled_root.node->empty())) {
         tiled->set_active();
         return true;
     }
