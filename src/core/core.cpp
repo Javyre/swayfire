@@ -503,12 +503,8 @@ void SplitNode::set_active_child(Node node) {
     parent->set_active_child(this);
 }
 
-void SplitNode::toggle_split_direction() {
-    LOGD("Toggling split dir: ", parent);
-
-    split_type = (split_type == SplitType::HSPLIT) ? SplitType::VSPLIT
-                                                   : SplitType::HSPLIT;
-
+void SplitNode::set_split_type(SplitType st) {
+    split_type = st;
     refresh_geometry();
 }
 

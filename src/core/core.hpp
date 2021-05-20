@@ -582,8 +582,11 @@ class SplitNode : public INode, public INodeParent {
     /// Remove a direct child from the given position in children.
     OwnedNode remove_child_at(SplitChildIter child);
 
-    /// Toggle the split direction of this node.
-    void toggle_split_direction();
+    /// Get the split type of this node.
+    SplitType get_split_type() { return split_type; }
+
+    /// Set the split type of this node.
+    void set_split_type(SplitType st);
 
     /// Try to downgrade this node to its only child node.
     ///

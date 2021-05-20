@@ -7,7 +7,10 @@ bool Swayfire::on_toggle_split_direction(wf::keybinding_t) {
     if (auto parent = get_current_workspace()
                           ->get_active_node()
                           ->parent->as_split_node()) {
-        parent->toggle_split_direction();
+
+        parent->set_split_type((parent->get_split_type() == SplitType::HSPLIT)
+                                   ? SplitType::VSPLIT
+                                   : SplitType::HSPLIT);
         return true;
     }
     return false;
