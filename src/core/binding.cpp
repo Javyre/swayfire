@@ -16,6 +16,26 @@ bool Swayfire::on_toggle_split_direction(wf::keybinding_t) {
     return false;
 }
 
+bool Swayfire::on_set_tabbed(wf::keybinding_t) {
+    if (auto parent = get_current_workspace()
+                          ->get_active_node()
+                          ->parent->as_split_node()) {
+        parent->set_split_type(SplitType::TABBED);
+        return true;
+    }
+    return false;
+}
+
+bool Swayfire::on_set_stacked(wf::keybinding_t) {
+    if (auto parent = get_current_workspace()
+                          ->get_active_node()
+                          ->parent->as_split_node()) {
+        parent->set_split_type(SplitType::STACKED);
+        return true;
+    }
+    return false;
+}
+
 bool Swayfire::on_set_want_vsplit(wf::keybinding_t) {
     if (auto vnode =
             get_current_workspace()->get_active_node()->as_view_node()) {
@@ -126,6 +146,8 @@ void Swayfire::bind_keys() {
     }
 
     BIND_KEY(toggle_split_direction);
+    BIND_KEY(set_tabbed);
+    BIND_KEY(set_stacked);
 
     BIND_KEY(set_want_vsplit);
     BIND_KEY(set_want_hsplit);

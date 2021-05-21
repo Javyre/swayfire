@@ -884,6 +884,8 @@ class Swayfire : public wf::plugin_interface_t {
     bool on_##NAME(wf::keybinding_t);
 
     DECL_KEY(toggle_split_direction);
+    DECL_KEY(set_tabbed);
+    DECL_KEY(set_stacked);
 
     DECL_KEY(set_want_vsplit);
     DECL_KEY(set_want_hsplit);

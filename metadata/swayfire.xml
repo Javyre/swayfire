@@ -10,6 +10,16 @@
         <_long>Toggle split direction</_long>
         <default>&lt;super&gt; KEY_E</default>
     </option>
+    <option name="key_set_tabbed" type="key">
+        <_short>Set layout to tabbed</_short>
+        <_long>Set layout to tabbed</_long>
+        <default>&lt;super&gt; KEY_W</default>
+    </option>
+    <option name="key_set_stacked" type="key">
+        <_short>Set layout to stacked</_short>
+        <_long>Set layout to stacked</_long>
+        <default>&lt;super&gt; KEY_S</default>
+    </option>
 
     <option name="key_set_want_vsplit" type="key">
         <_short>Set vertical split preference</_short>
