@@ -88,7 +88,6 @@ void INode::set_active() {
     parent->set_active_child(this);
     ws->set_active_node(this);
     find_root_parent()->bring_to_front();
-    bring_to_front();
 }
 
 void INode::tile_request(const bool tile) {
@@ -788,8 +787,15 @@ void SplitNode::set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) {
 }
 
 void SplitNode::bring_to_front() {
+    const auto ac = empty() ? nullptr : children.at(active_child).node.get();
+
     for (auto &child : children)
-        child.node->bring_to_front();
+        if (child.node.get() != ac)
+            child.node->bring_to_front();
+
+    // Bring the active child in front of the other children.
+    if (ac)
+        ac->bring_to_front();
 }
 
 void SplitNode::set_ws(WorkspaceRef ws) {
