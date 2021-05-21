@@ -88,6 +88,7 @@ void INode::set_active() {
     parent->set_active_child(this);
     ws->set_active_node(this);
     find_root_parent()->bring_to_front();
+    bring_to_front();
 }
 
 void INode::tile_request(const bool tile) {
