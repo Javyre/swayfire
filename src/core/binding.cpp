@@ -8,9 +8,15 @@ bool Swayfire::on_toggle_split_direction(wf::keybinding_t) {
                           ->get_active_node()
                           ->parent->as_split_node()) {
 
-        parent->set_split_type((parent->get_split_type() == SplitType::HSPLIT)
-                                   ? SplitType::VSPLIT
-                                   : SplitType::HSPLIT);
+        if (parent->is_split())
+            parent->set_split_type(
+                (parent->get_split_type() == SplitType::HSPLIT)
+                    ? SplitType::VSPLIT
+                    : SplitType::HSPLIT);
+        else
+            parent->set_split_type(parent->was_vsplit ? SplitType::VSPLIT
+                                                      : SplitType::HSPLIT);
+
         return true;
     }
     return false;

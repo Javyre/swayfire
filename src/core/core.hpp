@@ -540,6 +540,10 @@ class SplitNode : public INode, public INodeParent {
                                       bool use_preferred_sizes = false);
 
   public:
+    /// The last orientation of the split. (From last time it was a split and
+    /// not a stack)
+    bool was_vsplit = true;
+
     SplitNode(wf::geometry_t geo, SplitType split_type = SplitType::VSPLIT)
         : split_type(split_type) {
         geometry = geo;

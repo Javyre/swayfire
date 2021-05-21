@@ -510,6 +510,8 @@ void SplitNode::set_active_child(Node node) {
 }
 
 void SplitNode::set_split_type(SplitType st) {
+    if (is_split())
+        was_vsplit = split_type == SplitType::VSPLIT;
     split_type = st;
     refresh_geometry();
 }
