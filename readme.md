@@ -1,13 +1,13 @@
 # Swayfire
 *Sway/I3 inspired tiling window manager for Wayfire.*
 
-This project aims to emulate and improve upon sway/i3wm features as a
-plugin for the [Wayfire](https://github.com/WayfireWM/wayfire)
-compositor.
+This project aims to improve upon sway/i3wm features as a plugin for the
+[Wayfire](https://github.com/WayfireWM/wayfire) compositor.
 
-Currently, Swayfire implements most basic tiling features such as splits
-and window movement and navigation keys. Swayfire also supports mouse
-resizing and moving of windows/tiled parents.
+Currently, Swayfire implements most tiling features, optional decorations, and
+mouse resizing and moving of windows/tiled parents. See
+[here](https://github.com/Javyre/swayfire/projects/2) for a roadmap towards the
+first stable release.
 
 *NOTE:* Swayfire is currently still in early development and not meant
 to be used yet.
@@ -15,9 +15,10 @@ to be used yet.
 Notable planned features:
 - Sway/i3-like Window decorations (borders, titles, and tabbed and
     stacked titles as in Sway/i3)
-- Sway/i3 ipc (wherever it makes sense)
+- Sway/i3-inspired ipc (wherever it makes sense)
 - Option for rounded corners for floating windows and window groups
 - Scratchpad
+- Public API for writing Swayfire-specific Wayfire plugins.
 
 ## Installation
 
