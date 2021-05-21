@@ -350,6 +350,9 @@ void ViewNode::for_each_node(const std::function<void(Node)> &f) { f(this); }
 // SplitNode
 
 void SplitNode::sync_ratios_to_sizes() {
+    assert("Cannot sync ratios to sizes when children are stacked." &&
+           is_split());
+
     uint32_t total_size = 0;
     for (const auto &c : children)
         total_size += c.size;
@@ -393,7 +396,8 @@ void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
 
     double total_ratio = 0;
     if (!children.empty()) {
-        sync_ratios_to_sizes();
+        if (is_split())
+            sync_ratios_to_sizes();
 
         double shrink_ratio =
             (double)children.size() / (double)(children.size() + 1);
@@ -458,7 +462,8 @@ OwnedNode SplitNode::remove_child(Node node) {
 }
 
 OwnedNode SplitNode::remove_child_at(SplitChildIter child) {
-    sync_ratios_to_sizes();
+    if (is_split())
+        sync_ratios_to_sizes();
 
     auto owned_node = std::move(child->node);
     children.erase(child);
