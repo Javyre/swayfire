@@ -24,19 +24,11 @@ Notable planned features:
 
 To build and install from source:
 ```sh
-# Swayfire is developped using clang, but should compile with gcc as
-# well at least. The following exports are optional:
-export CC=clang
-export CXX=clang++
-
 # Generate the build directory:
-meson setup --prefix /usr build
+meson --prefix /usr --buildtype=release build
 
-# To compile Swayfire:
-meson compile -C build
-
-# To install Swayfire:
-meson install -C build
+# Build and install swayfire:
+sudo ninja -C build install
 ```
 
 Alternatively, Swayfire has been packaged for the following distros:
