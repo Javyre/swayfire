@@ -15,8 +15,8 @@ to be used yet.
 Notable planned features:
 - Sway/i3-like Window decorations (borders, titles, and tabbed and
     stacked titles as in Sway/i3)
-- Sway/i3-inspired ipc (wherever it makes sense)
-- Option for rounded corners for floating windows and window groups
+- Sway/i3-inspired ipc
+- Option for rounded corners ([wherever it makes sense](https://github.com/Javyre/swayfire/issues/19#issuecomment-847123760))
 - Scratchpad
 - Public API for writing Swayfire-specific Wayfire plugins.
 
