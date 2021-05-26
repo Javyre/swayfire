@@ -211,7 +211,50 @@ class INode : public virtual IDisplay {
 
     WorkspaceRef ws = nullptr; ///< The workspace by which this node is managed.
     wf::geometry_t geometry;   ///< The outer geometry of this node.
-    uint node_id;              ///< The id of this node.
+
+    struct Padding {
+        int left, right, top, bottom;
+
+        Padding &operator+=(const Padding &other) {
+            left += other.left;
+            right += other.right;
+            top += other.top;
+            bottom += other.bottom;
+            return *this;
+        }
+
+        Padding &operator-=(const Padding &other) {
+            left -= other.left;
+            right -= other.right;
+            top -= other.top;
+            bottom -= other.bottom;
+            return *this;
+        }
+
+        Padding operator-() const { return {-left, -right, -top, -bottom}; }
+
+        /// Add the padding area to the geometry.
+        friend wf::geometry_t operator+(const wf::geometry_t &a,
+                                        const Padding &b) {
+            wf::geometry_t res = a;
+            res.x -= b.left;
+            res.y -= b.top;
+            res.width += b.left + b.right;
+            res.height += b.top + b.bottom;
+            return res;
+        }
+
+        /// Subtract the padding area from the geometry.
+        friend wf::geometry_t operator-(const wf::geometry_t &a,
+                                        const Padding &b) {
+            return a + (-b);
+        }
+    };
+
+    /// The cached padding space around the node's inner_geometry.
+    Padding padding{};
+
+    uint node_id; ///< The id of this node.
 
     uint32_t safe_set_geo = 0; ///< If non-zero, disables side-effects of
                                ///< set_geometry().
@@ -235,7 +278,12 @@ class INode : public virtual IDisplay {
     ViewNodeRef as_view_node();
 
     /// Get the outer geometry of the node.
-    virtual wf::geometry_t get_geometry() { return geometry; }
+    wf::geometry_t get_geometry() { return geometry; }
+
+    /// Get the inner geometry of the node.
+    wf::geometry_t get_inner_geometry() {
+        return geometry - padding;
+    }
 
     /// Set the outer geometry of the node.
     ///
@@ -257,6 +305,12 @@ class INode : public virtual IDisplay {
         assert(safe_set_geo != 0);
         safe_set_geo--;
     }
+
+    /// Add the given padding to this node.
+    ///
+    /// Add negative padding to remove from the current padding.
+    /// This function does not refresh_geometry() for you.
+    void add_padding(Padding padding);
 
     /// Resize outer geometry to ndims if possible --by moving the given edges.
     ///
@@ -365,7 +419,7 @@ class ViewNode : public INode, public wf::signal_provider_t {
     /// Handle the view being mapped.
     wf::signal_connection_t on_mapped = [&](wf::signal_data_t *) {
         if (view->tiled_edges != wf::TILED_EDGES_ALL)
-            floating_geometry = view->get_wm_geometry();
+            floating_geometry = view->get_wm_geometry() + padding;
     };
 
     /// Handle unmapped views.

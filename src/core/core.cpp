@@ -74,6 +74,8 @@ SplitNodeRef INode::as_split_node() { return dynamic_cast<SplitNode *>(this); }
 
 ViewNodeRef INode::as_view_node() { return dynamic_cast<ViewNode *>(this); }
 
+void INode::add_padding(Padding padding) { this->padding += padding; }
+
 void INode::set_floating(bool fl) {
     if (!floating && fl)
         set_geometry(floating_geometry);
@@ -150,7 +152,7 @@ void ViewGeoEnforcer::update_transformer() {
     if (curr.width <= 0 && curr.height <= 0)
         return;
 
-    auto geo = view_node->get_geometry();
+    auto geo = view_node->get_inner_geometry();
 
     auto output = view_node->ws->output;
     auto wsid = view_node->ws->wsid;
@@ -190,7 +192,7 @@ ViewNode::ViewNode(wayfire_view view) : view(view) {
     geo_enforcer = ge.get();
     view->add_transformer(std::move(ge));
 
-    geometry = view->get_wm_geometry();
+    geometry = view->get_wm_geometry() + padding;
     floating_geometry = geometry;
 
     view->connect_signal("mapped", &on_mapped);
@@ -227,10 +229,10 @@ void ViewNode::on_geometry_changed_impl() {
         if (get_floating()) {
             const auto curr_wsid =
                 get_ws()->output->workspace->get_current_workspace();
-            const auto ngeo = nonwf::local_to_relative_geometry(
+            auto ngeo = nonwf::local_to_relative_geometry(
                 view->get_wm_geometry(), curr_wsid, get_ws()->wsid,
                 get_ws()->output);
-            set_geometry(ngeo);
+            set_geometry(ngeo + padding);
         } else {
             const auto new_ws =
                 get_ws()->plugin->get_view_workspace(view, false);
@@ -252,19 +254,20 @@ void ViewNode::set_floating(bool fl) {
     view->set_tiled(fl ? 0 : wf::TILED_EDGES_ALL);
 }
 
-void ViewNode::set_geometry(wf::geometry_t geo) {
+void ViewNode::set_geometry(const wf::geometry_t geo) {
     geometry = geo;
-
     if (safe_set_geo)
         return;
 
+    auto inner = get_inner_geometry();
+
     auto curr_wsid = ws->output->workspace->get_current_workspace();
     if (ws->wsid != curr_wsid)
-        geo = nonwf::local_to_relative_geometry(geo, ws->wsid, curr_wsid,
-                                                ws->output);
+        inner = nonwf::local_to_relative_geometry(inner, ws->wsid, curr_wsid,
+                                                  ws->output);
 
     push_disable_on_geometry_changed();
-    view->set_geometry(geo);
+    view->set_geometry(inner);
     pop_disable_on_geometry_changed();
 
     geo_enforcer->update_transformer();
@@ -375,8 +378,8 @@ void SplitNode::sync_sizes_to_ratios() {
            is_split());
 
     const auto total_size = split_type == SplitType::VSPLIT
-                                ? get_geometry().width
-                                : get_geometry().height;
+                                ? get_inner_geometry().width
+                                : get_inner_geometry().height;
 
     auto size_left = total_size;
     for (auto &c : children | nonstd::skip_last) {
@@ -805,7 +808,7 @@ void SplitNode::set_ws(WorkspaceRef ws) {
         child.node->set_ws(ws);
 }
 
-void SplitNode::set_geometry(wf::geometry_t geo) {
+void SplitNode::set_geometry(const wf::geometry_t geo) {
     geometry = geo;
 
     if (children.empty()) {
@@ -817,11 +820,13 @@ void SplitNode::set_geometry(wf::geometry_t geo) {
     if (safe_set_geo)
         return;
 
+    auto inner = get_inner_geometry();
+
     switch (split_type) {
     case SplitType::VSPLIT:
     case SplitType::HSPLIT: {
         const uint32_t size =
-            split_type == SplitType::VSPLIT ? geo.width : geo.height;
+            split_type == SplitType::VSPLIT ? inner.width : inner.height;
 
         {
             uint32_t total_children_size = 0;
@@ -837,16 +842,16 @@ void SplitNode::set_geometry(wf::geometry_t geo) {
         for (auto &c : children) {
             if (split_type == SplitType::VSPLIT)
                 c.node->set_geometry({
-                    geo.x + offset,
-                    geo.y,
+                    inner.x + offset,
+                    inner.y,
                     (int)c.size,
-                    geo.height,
+                    inner.height,
                 });
             else
                 c.node->set_geometry({
-                    geo.x,
-                    geo.y + offset,
-                    geo.width,
+                    inner.x,
+                    inner.y + offset,
+                    inner.width,
                     (int)c.size,
                 });
             offset += c.size;
@@ -859,12 +864,12 @@ void SplitNode::set_geometry(wf::geometry_t geo) {
     }
     case SplitType::TABBED: {
         for (auto &child : children)
-            child.node->set_geometry(geo);
+            child.node->set_geometry(inner);
         break;
     }
     case SplitType::STACKED: {
         for (auto &child : children)
-            child.node->set_geometry(geo);
+            child.node->set_geometry(inner);
         break;
     }
     }
