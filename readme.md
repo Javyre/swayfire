@@ -18,6 +18,8 @@ Notable planned features:
 - Sway/i3-inspired ipc
 - Option for rounded corners ([wherever it makes sense](https://github.com/Javyre/swayfire/issues/19#issuecomment-847123760))
 - Scratchpad
+- Custom tiling styles achievable through lua callbacks (binary
+  split, master-stack layout, ...).
 - Public API for writing Swayfire-specific Wayfire plugins.
 
 ## Installation
