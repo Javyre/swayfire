@@ -802,7 +802,14 @@ void SplitNode::bring_to_front() {
 }
 
 void SplitNode::set_ws(WorkspaceRef ws) {
+    auto old_ws = get_ws();
     INode::set_ws(ws);
+
+    if (!old_ws && ws) {
+        SplitNodeSignalData data = {};
+        data.node = this;
+        ws->output->emit_signal("swf-split-node-attached", &data);
+    }
 
     for (auto &child : children)
         child.node->set_ws(ws);

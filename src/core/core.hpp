@@ -197,6 +197,43 @@ static uint id_counter;
 
 class Swayfire;
 
+struct Padding {
+    int left, right, top, bottom;
+
+    Padding &operator+=(const Padding &other) {
+        left += other.left;
+        right += other.right;
+        top += other.top;
+        bottom += other.bottom;
+        return *this;
+    }
+
+    Padding &operator-=(const Padding &other) {
+        left -= other.left;
+        right -= other.right;
+        top -= other.top;
+        bottom -= other.bottom;
+        return *this;
+    }
+
+    Padding operator-() const { return {-left, -right, -top, -bottom}; }
+
+    /// Add the padding area to the geometry.
+    friend wf::geometry_t operator+(const wf::geometry_t &a, const Padding &b) {
+        wf::geometry_t res = a;
+        res.x -= b.left;
+        res.y -= b.top;
+        res.width += b.left + b.right;
+        res.height += b.top + b.bottom;
+        return res;
+    }
+
+    /// Subtract the padding area from the geometry.
+    friend wf::geometry_t operator-(const wf::geometry_t &a, const Padding &b) {
+        return a + (-b);
+    }
+};
+
 /// Interface for common functionality of nodes.
 class INode : public virtual IDisplay {
   protected:
@@ -211,45 +248,6 @@ class INode : public virtual IDisplay {
 
     WorkspaceRef ws = nullptr; ///< The workspace by which this node is managed.
     wf::geometry_t geometry;   ///< The outer geometry of this node.
-
-    struct Padding {
-        int left, right, top, bottom;
-
-        Padding &operator+=(const Padding &other) {
-            left += other.left;
-            right += other.right;
-            top += other.top;
-            bottom += other.bottom;
-            return *this;
-        }
-
-        Padding &operator-=(const Padding &other) {
-            left -= other.left;
-            right -= other.right;
-            top -= other.top;
-            bottom -= other.bottom;
-            return *this;
-        }
-
-        Padding operator-() const { return {-left, -right, -top, -bottom}; }
-
-        /// Add the padding area to the geometry.
-        friend wf::geometry_t operator+(const wf::geometry_t &a,
-                                        const Padding &b) {
-            wf::geometry_t res = a;
-            res.x -= b.left;
-            res.y -= b.top;
-            res.width += b.left + b.right;
-            res.height += b.top + b.bottom;
-            return res;
-        }
-
-        /// Subtract the padding area from the geometry.
-        friend wf::geometry_t operator-(const wf::geometry_t &a,
-                                        const Padding &b) {
-            return a + (-b);
-        }
-    };
 
     /// The cached padding space around the node's inner_geometry.
     Padding padding{};
@@ -281,9 +279,7 @@ class INode : public virtual IDisplay {
     wf::geometry_t get_geometry() { return geometry; }
 
     /// Get the inner geometry of the node.
-    wf::geometry_t get_inner_geometry() {
-        return geometry - padding;
-    }
+    wf::geometry_t get_inner_geometry() { return geometry - padding; }
 
     /// Set the outer geometry of the node.
     ///
@@ -340,7 +336,10 @@ class INode : public virtual IDisplay {
     WorkspaceRef get_ws() { return ws; };
 
     /// Set the workspace that manages this node.
-    virtual void set_ws(WorkspaceRef ws) { this->ws = ws; };
+    virtual void set_ws(WorkspaceRef ws) {
+        assert(ws);
+        this->ws = ws;
+    };
 
     /// Set the sublayer of views in the subtree starting at this node.
     virtual void
@@ -513,6 +512,12 @@ struct ViewNodeSignalData : wf::signal_data_t {
     ViewNodeRef node;
 };
 
+/// Data passed on split-node signals emitted from swayfire
+struct SplitNodeSignalData : wf::signal_data_t {
+    /// The node that triggered the signal
+    SplitNodeRef node;
+};
+
 /// Get the ViewNode corresponding to the wayfire view.
 ///
 /// \return The ViewNode of the view or nullptr.
@@ -529,6 +534,12 @@ inline ViewNodeRef get_signaled_view_node(wf::signal_data_t *data) {
     if (auto ndata = dynamic_cast<ViewNodeSignalData *>(data))
         return ndata->node;
     return get_view_node(wf::get_signaled_view(data));
+}
+
+inline SplitNodeRef get_signaled_split_node(wf::signal_data_t *data) {
+    auto ndata = dynamic_cast<SplitNodeSignalData *>(data);
+    assert(ndata);
+    return ndata->node;
 }
 
 /// A child of a split node.
