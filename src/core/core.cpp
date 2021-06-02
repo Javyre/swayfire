@@ -847,6 +847,13 @@ void SplitNode::set_geometry(const wf::geometry_t geo) {
 
         int offset = 0;
         for (auto &c : children) {
+            if (auto vnode = c.node->as_view_node()) {
+                if (vnode->view->fullscreen) {
+                    offset += (int)c.size;
+                    continue;
+                }
+            }
+
             if (split_type == SplitType::VSPLIT)
                 c.node->set_geometry({
                     inner.x + offset,
@@ -861,7 +868,7 @@ void SplitNode::set_geometry(const wf::geometry_t geo) {
                     inner.width,
                     (int)c.size,
                 });
-            offset += c.size;
+            offset += (int)c.size;
         }
 
         assert("Children sizes should add up to total size." &&
@@ -869,14 +876,15 @@ void SplitNode::set_geometry(const wf::geometry_t geo) {
 
         break;
     }
-    case SplitType::TABBED: {
-        for (auto &child : children)
-            child.node->set_geometry(inner);
-        break;
-    }
+    case SplitType::TABBED:
     case SplitType::STACKED: {
-        for (auto &child : children)
+        for (auto &child : children) {
+            if (auto vnode = child.node->as_view_node())
+                if (vnode->view->fullscreen)
+                    continue;
+
             child.node->set_geometry(inner);
+        }
         break;
     }
     }
@@ -1333,7 +1341,8 @@ std::unique_ptr<ViewNode> Swayfire::init_view_node(wayfire_view view) {
 
 void Swayfire::bind_signals() {
     output->connect_signal("view-focused", &on_view_focused);
-    output->connect_signal("view-fullscreen-request", &on_view_fullscreen_request);
+    output->connect_signal("view-fullscreen-request",
+                           &on_view_fullscreen_request);
     output->connect_signal("view-tile-request", &on_view_tile_request);
     output->connect_signal("view-layer-attached", &on_view_attached);
     output->connect_signal("view-minimize-request", &on_view_minimized);
