@@ -1333,6 +1333,7 @@ std::unique_ptr<ViewNode> Swayfire::init_view_node(wayfire_view view) {
 
 void Swayfire::bind_signals() {
     output->connect_signal("view-focused", &on_view_focused);
+    output->connect_signal("view-fullscreen-request", &on_view_fullscreen_request);
     output->connect_signal("view-tile-request", &on_view_tile_request);
     output->connect_signal("view-layer-attached", &on_view_attached);
     output->connect_signal("view-minimize-request", &on_view_minimized);
@@ -1342,6 +1343,7 @@ void Swayfire::unbind_signals() {
     output->disconnect_signal(&on_view_minimized);
     output->disconnect_signal(&on_view_attached);
     output->disconnect_signal(&on_view_tile_request);
+    output->disconnect_signal(&on_view_fullscreen_request);
     output->disconnect_signal(&on_view_focused);
 }
 

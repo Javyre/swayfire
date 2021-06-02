@@ -1007,6 +1007,31 @@ class Swayfire : public wf::plugin_interface_t {
         }
     };
 
+    /// Handle view fullscreen requests
+    wf::signal_connection_t on_view_fullscreen_request =
+        [&](wf::signal_data_t *data) {
+            auto fr_data =
+                static_cast<wf::view_fullscreen_request_signal *>(data);
+
+            if (const auto node = get_view_node(fr_data->view)) {
+                assert(!fr_data->carried_out);
+                fr_data->carried_out = true;
+
+                // FIXME: ignoring target workspace
+
+                if (fr_data->state || node->get_floating()) {
+                    node->set_geometry(fr_data->desired_size);
+                } else {
+                    auto sparent = node->parent->as_split_node();
+                    // parent of a tiled view_node must be a split
+                    assert(sparent);
+                    sparent->refresh_geometry();
+                }
+
+                return;
+            }
+        };
+
     /// Handle view tile requests
     wf::signal_connection_t on_view_tile_request =
         [&](wf::signal_data_t *data) {
