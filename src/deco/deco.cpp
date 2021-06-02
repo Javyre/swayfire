@@ -16,6 +16,9 @@ void ViewDecoration::damage() { node->view->damage(); }
 
 wf::geometry_t ViewDecoration::expand_wm_geometry(wf::geometry_t content) {
     // TODO: implement window titles in deco.
+    if (is_hidden())
+        return content;
+
     content.x -= options->border_width;
     content.y -= options->border_width;
     content.width += 2 * options->border_width;
@@ -25,6 +28,9 @@ wf::geometry_t ViewDecoration::expand_wm_geometry(wf::geometry_t content) {
 
 void ViewDecoration::calculate_resize_size(int &target_width,
                                            int &target_height) {
+    if (is_hidden())
+        return;
+
     target_width -= 2 * options->border_width;
     target_height -= 2 * options->border_width;
 
@@ -47,9 +53,23 @@ void ViewDecoration::notify_view_resized(wf::geometry_t view_geometry) {
     node->view->damage();
 }
 
+void ViewDecoration::hide(bool enable) {
+    hidden = enable;
+    // TODO: remove this code when
+    // https://github.com/WayfireWM/wayfire/pull/1187 gets released.
+    // It should be node->view->damage().
+    node->refresh_geometry();
+}
+
+bool ViewDecoration::is_hidden() const {
+    return hidden || node->view->fullscreen;
+}
+
 bool ViewDecoration::is_mapped() const { return mapped; }
 
 wf::point_t ViewDecoration::get_offset() {
+    if (is_hidden())
+        return {0, 0};
     return {-options->border_width, -options->border_width};
 }
 
@@ -64,6 +84,9 @@ bool ViewDecoration::accepts_input(int32_t sx, int32_t sy) {
 
 void ViewDecoration::simple_render(const wf::framebuffer_t &fb, int x, int y,
                                    const wf::region_t &damage) {
+    if (is_hidden())
+        return;
+
     const wf::region_t region = cached_region + wf::point_t{x, y};
 
     OpenGL::render_begin(fb);
