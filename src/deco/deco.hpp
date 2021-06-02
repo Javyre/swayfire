@@ -79,6 +79,9 @@ class ViewDecoration : public wf::compositor_surface_t,
     /// Whether the view is mapped or not.
     bool mapped = true;
 
+    /// Flag to force the decoration to be hidden.
+    bool hidden = false;
+
     /// The loaded options from the cfg.
     nonstd::observer_ptr<Options> options;
 
@@ -264,6 +267,13 @@ class ViewDecoration : public wf::compositor_surface_t,
         node->disconnect_signal(&on_detached);
         node->disconnect_signal(&on_prefered_split_type_changed);
     }
+
+    /// Force the decoration to be hidden.
+    void hide(bool enable);
+
+    /// Is the decoration hidden.
+    /// Respects the internal hidden flag, with additional policies.
+    bool is_hidden() const;
 
     /// Damage the decoration region.
     void damage();
