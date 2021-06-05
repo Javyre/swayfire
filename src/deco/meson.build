@@ -14,5 +14,5 @@ swayfire_deco = shared_module('swayfire-deco', plugin_src,
     dependencies: [wayfire, wlroots, pixman],
     link_with: swayfire_core,
     install_rpath: get_option('prefix') / get_option('libdir') / 'wayfire',
-    install: true, 
+    install: true,
     install_dir: get_option('libdir') / 'wayfire')
