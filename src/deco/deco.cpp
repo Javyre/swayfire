@@ -2,15 +2,6 @@
 
 // Decoration
 
-wf::region_t ViewDecoration::calculate_region() {
-    wf::region_t region;
-
-    for (const auto &ss : subsurfs)
-        region |= ss->calculate_region();
-
-    return region;
-}
-
 // TODO: damage only the region of the deco and not the whole bounding box.
 void ViewDecoration::damage() { node->view->damage(); }
 
@@ -39,54 +30,78 @@ void ViewDecoration::calculate_resize_size(int &target_width,
 }
 
 void ViewDecoration::notify_view_activated(bool active) {
-    colors = active ? &options->colors.focused : &options->colors.unfocused;
-    damage();
+    surface_ref->set_active(active);
+    if (!is_hidden())
+        damage();
 }
 
 // NOTE: This also gets called when first decorating the view, so this is when
-// we first properly get notified of its geometry and initialize cached_region.
+// we first properly get notified of its geometry and initialize the surface
+// region.
 void ViewDecoration::notify_view_resized(wf::geometry_t view_geometry) {
     node->view->damage();
-    width = view_geometry.width;
-    height = view_geometry.height;
-    cached_region = calculate_region();
-    node->view->damage();
+    surface_ref->set_size(wf::dimensions(view_geometry));
+    if (!is_hidden())
+        node->view->damage();
 }
 
-void ViewDecoration::hide(bool enable) {
-    hidden = enable;
-    // TODO: remove this code when
-    // https://github.com/WayfireWM/wayfire/pull/1187 gets released.
-    // It should be node->view->damage().
-    node->refresh_geometry();
+bool ViewDecoration::is_hidden() const { return (bool)surface; }
+
+void ViewDecoration::attach_surface() {
+    assert(surface);
+    node->view->add_subsurface(std::move(surface), false);
 }
 
-bool ViewDecoration::is_hidden() const {
-    return hidden || node->view->fullscreen;
+void ViewDecoration::detach_surface() {
+    assert(!surface);
+    surface = node->view->remove_subsurface(surface_ref);
 }
 
-bool ViewDecoration::is_mapped() const { return mapped; }
+// Decoration surface
 
-wf::point_t ViewDecoration::get_offset() {
-    if (is_hidden())
-        return {0, 0};
+void DecorationSurface::set_active(bool node_active) {
+    colors =
+        node_active ? &options->colors.focused : &options->colors.unfocused;
+}
+
+bool DecorationSurface::is_mapped() const { return mapped; }
+
+void DecorationSurface::unmap() {
+    mapped = false;
+    wf::emit_map_state_change(this);
+}
+
+wf::point_t DecorationSurface::get_offset() {
     return {-options->border_width, -options->border_width};
 }
 
-wf::dimensions_t ViewDecoration::get_size() const { return {width, height}; }
+wf::dimensions_t DecorationSurface::get_size() const { return size; }
 
-bool ViewDecoration::accepts_input(int32_t sx, int32_t sy) {
+// NOTE: This also gets called when first decorating the view, so this is when
+// we first properly get notified of its geometry and initialize cached_region.
+void DecorationSurface::set_size(wf::dimensions_t view_size) {
+    size = view_size;
+    recalculate_region();
+}
+
+void DecorationSurface::recalculate_region() {
+    wf::region_t region;
+
+    for (const auto &ss : subsurfs)
+        region |= ss->calculate_region();
+
+    cached_region = region;
+}
+
+bool DecorationSurface::accepts_input(int32_t sx, int32_t sy) {
     for (const auto &ss : subsurfs)
         if (ss->contains_point({sx, sy}))
             return true;
     return false;
 }
 
-void ViewDecoration::simple_render(const wf::framebuffer_t &fb, int x, int y,
-                                   const wf::region_t &damage) {
-    if (is_hidden())
-        return;
-
+void DecorationSurface::simple_render(const wf::framebuffer_t &fb, int x, int y,
+                                      const wf::region_t &damage) {
     const wf::region_t region = cached_region + wf::point_t{x, y};
 
     OpenGL::render_begin(fb);
@@ -105,11 +120,8 @@ void ViewDecoration::simple_render(const wf::framebuffer_t &fb, int x, int y,
 void SwayfireDeco::decorate_node(Node node) {
     if (auto vnode = node->as_view_node()) {
         LOGD("Decorating ", vnode);
-        auto surf = std::make_unique<ViewDecoration>(vnode, &options);
-        auto surfref = surf.get();
-        vnode->view->add_subsurface(std::move(surf), false);
-        vnode->view->set_decoration(surfref);
-        vnode->refresh_geometry();
+        auto deco = std::make_unique<ViewDecoration>(vnode, &options);
+        vnode->view->set_decoration(std::move(deco));
     } else if (auto snode = node->as_split_node()) {
         // TODO: implement split node decorations.
         (void)snode;

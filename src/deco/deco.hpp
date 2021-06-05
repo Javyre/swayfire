@@ -4,6 +4,7 @@
 #include <utility>
 #include <wayfire/compositor-surface.hpp>
 #include <wayfire/decorator.hpp>
+#include <wayfire/option-wrapper.hpp>
 #include <wayfire/plugin.hpp>
 #include <wayfire/surface.hpp>
 
@@ -70,24 +71,16 @@ struct Options {
     }
 };
 
-class ViewDecoration : public wf::compositor_surface_t,
-                       public wf::surface_interface_t,
-                       public wf::decorator_frame_t_t {
+class DecorationSurface : public wf::compositor_surface_t,
+                          public wf::surface_interface_t {
   private:
     const ViewNodeRef node; ///< The node we're decorating.
 
     /// Whether the view is mapped or not.
     bool mapped = true;
 
-    /// Flag to force the decoration to be hidden.
-    bool hidden = false;
-
     /// The loaded options from the cfg.
     nonstd::observer_ptr<Options> options;
-
-    /// The current color set.
-    nonstd::observer_ptr<DecorationColors> colors =
-        &(options->colors.unfocused);
 
     /// The subsurfaces that make up the decoration.
     const struct {
@@ -101,7 +94,7 @@ class ViewDecoration : public wf::compositor_surface_t,
                     0,
                     options->border_radius,
                     options->border_width,
-                    height - (2 * options->border_radius),
+                    size.height - (2 * options->border_radius),
                 };
             },
             [&]() { return colors->child_border.value(); }),
@@ -110,10 +103,10 @@ class ViewDecoration : public wf::compositor_surface_t,
         RectSubSurf(
             [&]() {
                 return wf::geometry_t{
-                    width - options->border_width,
+                    size.width - options->border_width,
                     options->border_radius,
                     options->border_width,
-                    height - (2 * options->border_radius),
+                    size.height - (2 * options->border_radius),
                 };
             },
             [&]() {
@@ -128,7 +121,7 @@ class ViewDecoration : public wf::compositor_surface_t,
                 return wf::geometry_t{
                     options->border_radius,
                     0,
-                    width - (2 * options->border_radius),
+                    size.width - (2 * options->border_radius),
                     options->border_width,
                 };
             },
@@ -139,8 +132,8 @@ class ViewDecoration : public wf::compositor_surface_t,
             [&]() {
                 return wf::geometry_t{
                     options->border_radius,
-                    height - options->border_width,
-                    width - (2 * options->border_radius),
+                    size.height - options->border_width,
+                    size.width - (2 * options->border_radius),
                     options->border_width,
                 };
             },
@@ -167,7 +160,8 @@ class ViewDecoration : public wf::compositor_surface_t,
         CurveSubSurf(
             [&]() {
                 return CurveSubSurf::Spec{
-                    {width - options->border_radius, options->border_radius},
+                    {size.width - options->border_radius,
+                     options->border_radius},
                     0,
                     M_PI_2,
                     options->border_radius,
@@ -180,7 +174,8 @@ class ViewDecoration : public wf::compositor_surface_t,
         CurveSubSurf(
             [&]() {
                 return CurveSubSurf::Spec{
-                    {options->border_radius, height - options->border_radius},
+                    {options->border_radius,
+                     size.height - options->border_radius},
                     M_PI,
                     M_PI + M_PI_2,
                     options->border_radius,
@@ -193,8 +188,8 @@ class ViewDecoration : public wf::compositor_surface_t,
         CurveSubSurf(
             [&]() {
                 return CurveSubSurf::Spec{
-                    {width - options->border_radius,
-                     height - options->border_radius},
+                    {size.width - options->border_radius,
+                     size.height - options->border_radius},
                     M_PI + M_PI_2,
                     2 * M_PI,
                     options->border_radius,
@@ -203,6 +198,10 @@ class ViewDecoration : public wf::compositor_surface_t,
             },
             [&]() { return colors->child_border.value(); }),
     };
+
+    /// The current color set.
+    nonstd::observer_ptr<DecorationColors> colors =
+        &(options->colors.unfocused);
 
     /// All subsurfaces in an array to easily iterate through them.
     const std::array<const ISubSurf *const, 8> subsurfs = {
@@ -213,13 +212,47 @@ class ViewDecoration : public wf::compositor_surface_t,
         &_subsurfs.bottom_left, &_subsurfs.bottom_right,
     };
 
-    int width = 0;  ///< Width of the decoration.
-    int height = 0; ///< Height of the decoration.
+    wf::dimensions_t size; ///< Size of the decoration.
 
     wf::region_t cached_region; ///< Cached minimal region containing this deco.
 
-    /// Calculate the minimal region that contains this decoration surface.
-    wf::region_t calculate_region();
+  public:
+    DecorationSurface(ViewNodeRef node, nonstd::observer_ptr<Options> options)
+        : node(node), options(options) {}
+
+    // Set the size of the surface.
+    void set_size(wf::dimensions_t view_size);
+
+    // Set the surface color as active or inactive.
+    void set_active(bool active);
+
+    // Recalculate the region and cache it.
+    void recalculate_region();
+
+    // Unmap the surface.
+    void unmap();
+
+    // == Impl wf::surface_interface_t ==
+    bool is_mapped() const override;
+    wf::point_t get_offset() override;
+    wf::dimensions_t get_size() const override;
+    bool accepts_input(int32_t sx, int32_t sy) override;
+    void simple_render(const wf::framebuffer_t &fb, int x, int y,
+                       const wf::region_t &damage) override;
+};
+
+class ViewDecoration : public wf::decorator_frame_t_t {
+  private:
+    const ViewNodeRef node; ///< The node we're decorating.
+
+    /// Surface representing the decoration.
+    nonstd::observer_ptr<DecorationSurface> surface_ref;
+
+    /// Surface swap, used when hiding the surface from the node.
+    std::unique_ptr<wf::surface_interface_t> surface;
+
+    /// The loaded options from the cfg.
+    nonstd::observer_ptr<Options> options;
 
     wf::signal_connection_t on_prefered_split_type_changed =
         [&](wf::signal_data_t *) { damage(); };
@@ -227,24 +260,38 @@ class ViewDecoration : public wf::compositor_surface_t,
     wf::signal_connection_t on_config_changed = [&](wf::signal_data_t *) {
         // Refresh geometry in case border_width changes.
         node->refresh_geometry();
-
-        // Refreshing the geometry may not actually change the geometry. (e.g.
-        // If only border_radius changes) So we still need to update the
-        // cached_region here.
-        cached_region = calculate_region();
+        surface_ref->recalculate_region();
         node->view->damage();
     };
 
     wf::signal_connection_t on_detached = [&](wf::signal_data_t *) {
-        mapped = false;
-        wf::emit_map_state_change(this);
-        node->view->set_decoration(nullptr); // ViewDecoration dies here.
+        surface_ref->unmap();
+        if (!is_hidden())
+            detach_surface();
 
-        // TODO: remove this code when
-        // https://github.com/WayfireWM/wayfire/pull/1187 gets released.
-        // This shouldn't be done here but in wayfire itself.
-        node->refresh_geometry();
+        // Save the current node in case cleaning the data triggers a
+        // destruction of the current decoration. Avoid crashing when trying to
+        // access to the node.
+        auto vnode = node;
+        vnode->view->set_decoration(nullptr); // ViewDecoration dies here.
     };
+
+    wf::signal_connection_t on_fullscreen = [&](wf::signal_data_t *) {
+        if (node->view->fullscreen) {
+            if (!is_hidden())
+                detach_surface();
+        } else {
+            if (is_hidden())
+                attach_surface();
+        }
+        node->view->damage();
+    };
+
+    // Attach the decoration surface to the node;
+    void attach_surface();
+
+    // Detach the decoration surface from the node;
+    void detach_surface();
 
   public:
     ViewDecoration(ViewNodeRef node, nonstd::observer_ptr<Options> options)
@@ -253,26 +300,34 @@ class ViewDecoration : public wf::compositor_surface_t,
         node->connect_signal("prefered-split-type-changed",
                              &on_prefered_split_type_changed);
         node->connect_signal("detached", &on_detached);
+        node->view->connect_signal("fullscreen", &on_fullscreen);
 
         const auto output = node->get_ws()->output;
         output->connect_signal("swf-deco-fini", &on_detached);
         output->connect_signal("swf-deco-config-changed", &on_config_changed);
+
+        auto surface_unique_ptr =
+            std::make_unique<DecorationSurface>(node, options);
+        surface_ref = surface_unique_ptr.get();
+        surface = std::move(surface_unique_ptr);
+        if (!node->view->fullscreen)
+            attach_surface();
     }
 
     ~ViewDecoration() override {
+        if (!is_hidden())
+            detach_surface();
+
         const auto output = node->get_ws()->output;
         output->disconnect_signal(&on_config_changed);
         output->disconnect_signal(&on_detached);
 
+        node->view->disconnect_signal(&on_fullscreen);
         node->disconnect_signal(&on_detached);
         node->disconnect_signal(&on_prefered_split_type_changed);
     }
 
-    /// Force the decoration to be hidden.
-    void hide(bool enable);
-
-    /// Is the decoration hidden.
-    /// Respects the internal hidden flag, with additional policies.
+    /// Is the decoration currently hidden.
     bool is_hidden() const;
 
     /// Damage the decoration region.
@@ -285,16 +340,7 @@ class ViewDecoration : public wf::compositor_surface_t,
     void notify_view_resized(wf::geometry_t view_geometry) override;
     /* TODO: impl these handlers
     void notify_view_tiled() override;
-    void notify_view_fullscreen() override;
     */
-
-    // == Impl wf::surface_interface_t ==
-    bool is_mapped() const override;
-    wf::point_t get_offset() override;
-    wf::dimensions_t get_size() const override;
-    bool accepts_input(int32_t sx, int32_t sy) override;
-    void simple_render(const wf::framebuffer_t &fb, int x, int y,
-                       const wf::region_t &damage) override;
 };
 
 class SwayfireDeco : public SwayfirePlugin {
