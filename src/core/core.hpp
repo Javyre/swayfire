@@ -1051,7 +1051,7 @@ class Swayfire : public wf::plugin_interface_t {
     wf::signal_connection_t on_view_attached = [&](wf::signal_data_t *data) {
         auto view = wf::get_signaled_view(data);
 
-        if (view->role != wf::VIEW_ROLE_TOPLEVEL)
+        if (view->role != wf::VIEW_ROLE_TOPLEVEL || view->parent)
             return;
 
         auto ws = workspaces.get(nonwf::get_view_workspace(view));
