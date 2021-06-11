@@ -274,7 +274,8 @@ wf::dimensions_t Workspace::try_resize_child(Node child, wf::dimensions_t ndims,
 void SplitNode::begin_resize() {
     INode::begin_resize();
 
-    sync_sizes_to_ratios();
+    if (is_split())
+        sync_sizes_to_ratios();
 
     for (auto &child : children)
         child.node->begin_resize();
@@ -283,7 +284,8 @@ void SplitNode::begin_resize() {
 void SplitNode::end_resize() {
     INode::end_resize();
 
-    sync_ratios_to_sizes();
+    if (is_split())
+        sync_ratios_to_sizes();
 
     for (auto &child : children)
         child.node->end_resize();
