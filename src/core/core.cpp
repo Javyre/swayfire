@@ -336,8 +336,11 @@ void ViewNode::set_ws(WorkspaceRef ws) {
 void ViewNode::set_active() {
     INode::set_active();
 
-    if (!view->activated)
-        get_ws()->output->focus_view(view, true);
+    for (auto view : view->enumerate_views())
+        if (view->activated)
+            return;
+
+    get_ws()->output->focus_view(view, true);
 }
 
 NodeParent ViewNode::get_or_upgrade_to_parent_node() {
