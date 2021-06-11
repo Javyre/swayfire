@@ -1,4 +1,7 @@
 # Swayfire
+
+[![IRC: #swayfire on libera](https://img.shields.io/badge/irc-%23swayfire-informational)](https://web.libera.chat/#swayfire)
+
 *Sway/I3 inspired tiling window manager for Wayfire.*
 
 This project aims to improve upon sway/i3wm features as a plugin for the
