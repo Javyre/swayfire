@@ -116,12 +116,12 @@ void ActiveResize::pointer_motion(uint32_t x, uint32_t y) {
     // been updates.
     root_node->for_each_node([](auto n) {
         if (auto v = n->as_view_node())
-            v->push_safe_set_geo();
+            v->ref_pure_set_geo();
     });
     dragged->try_resize({nw, nh}, resizing_edges);
     root_node->for_each_node([](auto n) {
         if (auto v = n->as_view_node())
-            v->pop_safe_set_geo();
+            v->unref_pure_set_geo();
     });
     root_node->refresh_geometry();
 }

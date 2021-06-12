@@ -62,7 +62,7 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
         if (delta_size == 0)
             return 0;
 
-        push_safe_set_geo();
+        ref_pure_set_geo();
         const auto dims =
             (split_type == SplitType::VSPLIT)
                 ? wf::dimensions_t({size + delta_size, geo.height})
@@ -76,7 +76,7 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
             split_type == SplitType::VSPLIT
                 ? parent->try_resize_child(this, dims, edge).width
                 : parent->try_resize_child(this, dims, edge).height;
-        pop_safe_set_geo();
+        unref_pure_set_geo();
 
         delta_size = new_size - size;
 
@@ -167,7 +167,7 @@ wf::dimensions_t SplitNode::try_resize_child(Node node, wf::dimensions_t ndims,
     switch (split_type) {
     case SplitType::VSPLIT:
     case SplitType::HSPLIT: {
-        push_safe_set_geo();
+        ref_pure_set_geo();
 
         auto delta_size =
             split_type == SplitType::VSPLIT ? delta.width : delta.height;
@@ -227,7 +227,7 @@ wf::dimensions_t SplitNode::try_resize_child(Node node, wf::dimensions_t ndims,
             parent->try_resize_child(this, nndims, edges);
         }
 
-        pop_safe_set_geo();
+        unref_pure_set_geo();
         refresh_geometry();
 
         return wf::dimensions(node->get_geometry());

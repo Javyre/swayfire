@@ -254,8 +254,8 @@ class INode : public virtual IDisplay {
 
     uint node_id; ///< The id of this node.
 
-    uint32_t safe_set_geo = 0; ///< If non-zero, disables side-effects of
-                               ///< set_geometry().
+    uint pure_set_geo = 0; ///< If non-zero, disables side-effects of
+                           ///< set_geometry().
 
     INode() : node_id(id_counter) { id_counter++; }
 
@@ -292,14 +292,15 @@ class INode : public virtual IDisplay {
     /// This is mainly to cause a recalculation of children geometries.
     void refresh_geometry() { set_geometry(get_geometry()); }
 
-    /// Enable safe set_geometry() mode which prevents side-effects.
-    void push_safe_set_geo() { safe_set_geo++; }
+    /// Increment the pure set_geometry() mode reference count and prevent
+    /// side-effects.
+    void ref_pure_set_geo() { pure_set_geo++; }
 
-    /// Restore to previous safe set_geometry() mode to maybe allow side-effects
-    /// again.
-    void pop_safe_set_geo() {
-        assert(safe_set_geo != 0);
-        safe_set_geo--;
+    /// Decrement the pure set_geometry() mode reference count and allow
+    /// side-effects if count is 0.
+    void unref_pure_set_geo() {
+        assert(pure_set_geo);
+        pure_set_geo--;
     }
 
     /// Add the given padding to this node.

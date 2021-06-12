@@ -256,7 +256,7 @@ void ViewNode::set_floating(bool fl) {
 
 void ViewNode::set_geometry(const wf::geometry_t geo) {
     geometry = geo;
-    if (safe_set_geo)
+    if (pure_set_geo)
         return;
 
     auto inner = get_inner_geometry();
@@ -827,7 +827,7 @@ void SplitNode::set_geometry(const wf::geometry_t geo) {
         return;
     }
 
-    if (safe_set_geo)
+    if (pure_set_geo)
         return;
 
     auto inner = get_inner_geometry();
