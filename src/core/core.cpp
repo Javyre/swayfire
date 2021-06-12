@@ -146,6 +146,13 @@ ViewGeoEnforcer::~ViewGeoEnforcer() {
     view->disconnect_signal(&on_geometry_changed);
 }
 
+void ViewGeoEnforcer::ref_disable() { disabled++; }
+
+void ViewGeoEnforcer::unref_disable() {
+    assert(disabled);
+    disabled--;
+}
+
 void ViewGeoEnforcer::update_transformer() {
     auto curr = view->get_wm_geometry();
 
@@ -160,7 +167,7 @@ void ViewGeoEnforcer::update_transformer() {
     if (wsid != curr_wsid)
         geo = nonwf::local_to_relative_geometry(geo, wsid, curr_wsid, output);
 
-    if (curr == geo) {
+    if (disabled || curr == geo) {
         scale_x = 1;
         scale_y = 1;
         translation_x = 0;
@@ -850,13 +857,6 @@ void SplitNode::set_geometry(const wf::geometry_t geo) {
 
         int offset = 0;
         for (auto &c : children) {
-            if (auto vnode = c.node->as_view_node()) {
-                if (vnode->view->fullscreen) {
-                    offset += (int)c.size;
-                    continue;
-                }
-            }
-
             if (split_type == SplitType::VSPLIT)
                 c.node->set_geometry({
                     inner.x + offset,
@@ -881,13 +881,8 @@ void SplitNode::set_geometry(const wf::geometry_t geo) {
     }
     case SplitType::TABBED:
     case SplitType::STACKED: {
-        for (auto &child : children) {
-            if (auto vnode = child.node->as_view_node())
-                if (vnode->view->fullscreen)
-                    continue;
-
+        for (auto &child : children)
             child.node->set_geometry(inner);
-        }
         break;
     }
     }

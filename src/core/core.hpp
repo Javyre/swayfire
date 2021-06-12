@@ -392,6 +392,9 @@ class ViewGeoEnforcer : public wf::view_2D {
   private:
     ViewNodeRef view_node;
 
+    /// Reference counted geo_enforcer disable switch.
+    uint disabled = 0;
+
     /// Handle the view changing geometry.
     wf::signal_connection_t on_geometry_changed = [&](wf::signal_data_t *) {
         update_transformer();
@@ -401,6 +404,13 @@ class ViewGeoEnforcer : public wf::view_2D {
     ViewGeoEnforcer(ViewNodeRef node);
 
     ~ViewGeoEnforcer() override;
+
+    /// Increment the disable reference count and disable the geo enforcer.
+    void ref_disable();
+
+    /// Decrement the disable reference count and enable the geo enforcer if
+    /// count is 0.
+    void unref_disable();
 
     /// Update the scaling and offset to enforce the geometry.
     void update_transformer();
@@ -1020,13 +1030,18 @@ class Swayfire : public wf::plugin_interface_t {
 
                 // FIXME: ignoring target workspace
 
-                if (fr_data->state || node->get_floating()) {
-                    node->set_geometry(fr_data->desired_size);
+                if (fr_data->state) {
+                    node->geo_enforcer->ref_disable();
+                    node->ref_pure_set_geo();
+                    node->view->set_geometry(fr_data->desired_size);
                 } else {
-                    auto sparent = node->parent->as_split_node();
-                    // parent of a tiled view_node must be a split
-                    assert(sparent);
-                    sparent->refresh_geometry();
+                    node->geo_enforcer->unref_disable();
+                    node->unref_pure_set_geo();
+
+                    if (node->get_floating())
+                        node->set_geometry(fr_data->desired_size);
+                    else
+                        node->refresh_geometry();
                 }
 
                 return;
