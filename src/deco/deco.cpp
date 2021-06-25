@@ -57,7 +57,15 @@ void ViewDecoration::detach_surface() {
     surface = node->view->remove_subsurface(surface_ref);
 }
 
-// Decoration surface
+// DecorationSurface
+
+BorderSubSurf::Spec DecorationSurface::get_border_spec() const {
+    return {
+        {0, 0, size.width, size.height},
+        options->border_radius,
+        options->border_width,
+    };
+}
 
 void DecorationSurface::set_active(bool node_active) {
     colors =
@@ -85,31 +93,38 @@ void DecorationSurface::set_size(wf::dimensions_t view_size) {
 }
 
 void DecorationSurface::recalculate_region() {
-    wf::region_t region;
-
-    for (const auto &ss : subsurfs)
-        region |= ss->calculate_region();
-
-    cached_region = region;
+    cached_region = BorderSubSurf::calculate_region(get_border_spec());
 }
 
 bool DecorationSurface::accepts_input(int32_t sx, int32_t sy) {
-    for (const auto &ss : subsurfs)
-        if (ss->contains_point({sx, sy}))
-            return true;
-    return false;
+    return BorderSubSurf::contains_point(get_border_spec(), {sx, sy});
 }
 
 void DecorationSurface::simple_render(const wf::framebuffer_t &fb, int x, int y,
                                       const wf::region_t &damage) {
     const wf::region_t region = cached_region + wf::point_t{x, y};
+    const auto spec = get_border_spec();
+    const auto color_spec = BorderSubSurf::Colors{
+        // all
+        colors->child_border,
+
+        // right
+        node->get_prefered_split_type() == SplitType::VSPLIT
+            ? colors->indicator.value()
+            : colors->child_border.value(),
+
+        // bottom
+        node->get_prefered_split_type() == SplitType::HSPLIT
+            ? colors->indicator.value()
+            : colors->child_border.value(),
+    };
 
     OpenGL::render_begin(fb);
     for (const auto &scissor : region &damage) {
         fb.logic_scissor(wlr_box_from_pixman_box(scissor));
 
-        for (const auto &ss : subsurfs)
-            ss->render({x, y}, fb.get_orthographic_projection());
+        BorderSubSurf::render(spec, color_spec, {x, y},
+                              fb.get_orthographic_projection());
     }
 
     OpenGL::render_end();

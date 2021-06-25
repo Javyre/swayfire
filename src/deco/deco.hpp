@@ -76,141 +76,17 @@ class DecorationSurface : public wf::compositor_surface_t,
   private:
     const ViewNodeRef node; ///< The node we're decorating.
 
-    /// Whether the view is mapped or not.
+    /// Whether the surface is mapped or not.
     bool mapped = true;
 
     /// The loaded options from the cfg.
     nonstd::observer_ptr<Options> options;
 
-    /// The subsurfaces that make up the decoration.
-    const struct {
-        const RectSubSurf left, right, top, bottom;
-        const CurveSubSurf top_left, top_right, bottom_left, bottom_right;
-    } _subsurfs = {
-        // Left side
-        RectSubSurf(
-            [&]() {
-                return wf::geometry_t{
-                    0,
-                    options->border_radius,
-                    options->border_width,
-                    size.height - (2 * options->border_radius),
-                };
-            },
-            [&]() { return colors->child_border.value(); }),
-
-        // Right side
-        RectSubSurf(
-            [&]() {
-                return wf::geometry_t{
-                    size.width - options->border_width,
-                    options->border_radius,
-                    options->border_width,
-                    size.height - (2 * options->border_radius),
-                };
-            },
-            [&]() {
-                return node->get_prefered_split_type() == SplitType::VSPLIT
-                           ? colors->indicator.value()
-                           : colors->child_border.value();
-            }),
-
-        // Top side
-        RectSubSurf(
-            [&]() {
-                return wf::geometry_t{
-                    options->border_radius,
-                    0,
-                    size.width - (2 * options->border_radius),
-                    options->border_width,
-                };
-            },
-            [&]() { return colors->child_border.value(); }),
-
-        // Bottom side
-        RectSubSurf(
-            [&]() {
-                return wf::geometry_t{
-                    options->border_radius,
-                    size.height - options->border_width,
-                    size.width - (2 * options->border_radius),
-                    options->border_width,
-                };
-            },
-            [&]() {
-                return node->get_prefered_split_type() == SplitType::HSPLIT
-                           ? colors->indicator.value()
-                           : colors->child_border.value();
-            }),
-
-        // Top-left corner
-        CurveSubSurf(
-            [&]() {
-                return CurveSubSurf::Spec{
-                    {options->border_radius, options->border_radius},
-                    M_PI_2,
-                    M_PI,
-                    options->border_radius,
-                    options->border_width,
-                };
-            },
-            [&]() { return colors->child_border.value(); }),
-
-        // Top-right corner
-        CurveSubSurf(
-            [&]() {
-                return CurveSubSurf::Spec{
-                    {size.width - options->border_radius,
-                     options->border_radius},
-                    0,
-                    M_PI_2,
-                    options->border_radius,
-                    options->border_width,
-                };
-            },
-            [&]() { return colors->child_border.value(); }),
-
-        // Bottom-left corner
-        CurveSubSurf(
-            [&]() {
-                return CurveSubSurf::Spec{
-                    {options->border_radius,
-                     size.height - options->border_radius},
-                    M_PI,
-                    M_PI + M_PI_2,
-                    options->border_radius,
-                    options->border_width,
-                };
-            },
-            [&]() { return colors->child_border.value(); }),
-
-        // Bottom-right corner
-        CurveSubSurf(
-            [&]() {
-                return CurveSubSurf::Spec{
-                    {size.width - options->border_radius,
-                     size.height - options->border_radius},
-                    M_PI + M_PI_2,
-                    2 * M_PI,
-                    options->border_radius,
-                    options->border_width,
-                };
-            },
-            [&]() { return colors->child_border.value(); }),
-    };
-
     /// The current color set.
     nonstd::observer_ptr<DecorationColors> colors =
         &(options->colors.unfocused);
 
-    /// All subsurfaces in an array to easily iterate through them.
-    const std::array<const ISubSurf *const, 8> subsurfs = {
-        &_subsurfs.left,        &_subsurfs.right,
-        &_subsurfs.top,         &_subsurfs.bottom,
-
-        &_subsurfs.top_left,    &_subsurfs.top_right,
-        &_subsurfs.bottom_left, &_subsurfs.bottom_right,
-    };
+    [[nodiscard]] BorderSubSurf::Spec get_border_spec() const;
 
     wf::dimensions_t size; ///< Size of the decoration.
 

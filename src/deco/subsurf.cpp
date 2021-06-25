@@ -81,21 +81,24 @@ void subsurf_gl_fini() {
 
 // RectSubSurf
 
-void RectSubSurf::render(wf::point_t origin, glm::mat4 matrix) const {
-    OpenGL::render_rectangle(get_geo() + origin, get_color(), matrix);
+namespace RectSubSurf {
+void render(wf::geometry_t geo, wf::color_t color, wf::point_t origin,
+            glm::mat4 matrix) {
+    OpenGL::render_rectangle(geo + origin, color, matrix);
 }
 
-wf::region_t RectSubSurf::calculate_region() const { return get_geo(); }
+wf::region_t calculate_region(wf::geometry_t geo) { return geo; }
 
-bool RectSubSurf::contains_point(wf::point_t pt) const {
-    return wf::region_t{get_geo()}.contains_point(pt);
+bool contains_point(wf::geometry_t geo, wf::point_t pt) {
+    return wf::region_t{geo}.contains_point(pt);
 }
+} // namespace RectSubSurf
 
 // CurveSubSurf
 
-void CurveSubSurf::render(wf::point_t origin, glm::mat4 matrix) const {
-    const auto spec = get_spec();
-    const auto color = get_color();
+namespace CurveSubSurf {
+void render(Spec spec, wf::color_t color, wf::point_t origin,
+            glm::mat4 matrix) {
     origin = origin + spec.origin;
 
     curve_program.use(wf::TEXTURE_TYPE_RGBA);
@@ -131,8 +134,7 @@ void CurveSubSurf::render(wf::point_t origin, glm::mat4 matrix) const {
     curve_program.deactivate();
 }
 
-wf::region_t CurveSubSurf::calculate_region() const {
-    const auto spec = get_spec();
+wf::region_t calculate_region(Spec spec) {
     return wf::geometry_t{
         spec.origin.x - spec.radius,
         spec.origin.y - spec.radius,
@@ -141,8 +143,7 @@ wf::region_t CurveSubSurf::calculate_region() const {
     };
 }
 
-bool CurveSubSurf::contains_point(wf::point_t pt) const {
-    const auto spec = get_spec();
+bool contains_point(Spec spec, wf::point_t pt) {
     const wf::point_t diff = pt - spec.origin;
     const float dist = std::sqrt((float)(diff.x * diff.x + diff.y * diff.y));
 
@@ -158,3 +159,120 @@ bool CurveSubSurf::contains_point(wf::point_t pt) const {
 
     return true;
 }
+} // namespace CurveSubSurf
+
+// BorderSubSurf
+namespace BorderSubSurf {
+struct SubSpecs {
+    const RectSubSurf::Spec left, right, top, bottom;
+    const CurveSubSurf::Spec top_left, top_right, bottom_left, bottom_right;
+};
+
+inline SubSpecs subspecs(Spec spec) {
+    return {
+        // Left side
+        wf::geometry_t{0, spec.border_radius, spec.border_width,
+                       spec.geo.height - (2 * spec.border_radius)},
+        // Right side
+        wf::geometry_t{
+            spec.geo.width - spec.border_width,
+            spec.border_radius,
+            spec.border_width,
+            spec.geo.height - (2 * spec.border_radius),
+        },
+        // Top side
+        wf::geometry_t{
+            spec.border_radius,
+            0,
+            spec.geo.width - (2 * spec.border_radius),
+            spec.border_width,
+        },
+        // Bottom side
+        wf::geometry_t{
+            spec.border_radius,
+            spec.geo.height - spec.border_width,
+            spec.geo.width - (2 * spec.border_radius),
+            spec.border_width,
+        },
+
+        // Top-left corner
+        CurveSubSurf::Spec{
+            {spec.border_radius, spec.border_radius},
+            M_PI_2,
+            M_PI,
+            spec.border_radius,
+            spec.border_width,
+        },
+        // Top-right corner
+        CurveSubSurf::Spec{
+            {spec.geo.width - spec.border_radius, spec.border_radius},
+            0,
+            M_PI_2,
+            spec.border_radius,
+            spec.border_width,
+        },
+        // Bottom-left corner
+        CurveSubSurf::Spec{
+            {spec.border_radius, spec.geo.height - spec.border_radius},
+            M_PI,
+            M_PI + M_PI_2,
+            spec.border_radius,
+            spec.border_width,
+        },
+        // Bottom-right corner
+        CurveSubSurf::Spec{
+            {spec.geo.width - spec.border_radius,
+             spec.geo.height - spec.border_radius},
+            M_PI + M_PI_2,
+            2 * M_PI,
+            spec.border_radius,
+            spec.border_width,
+        },
+    };
+}
+
+void render(const Spec spec, Colors colors, wf::point_t origin,
+            glm::mat4 matrix) {
+    const auto specs = subspecs(spec);
+    RectSubSurf::render(specs.left, colors.all, origin, matrix);
+    RectSubSurf::render(specs.right, colors.right, origin, matrix);
+    RectSubSurf::render(specs.top, colors.all, origin, matrix);
+    RectSubSurf::render(specs.bottom, colors.bottom, origin, matrix);
+
+    CurveSubSurf::render(specs.top_left, colors.all, origin, matrix);
+    CurveSubSurf::render(specs.top_right, colors.all, origin, matrix);
+    CurveSubSurf::render(specs.bottom_left, colors.all, origin, matrix);
+    CurveSubSurf::render(specs.bottom_right, colors.all, origin, matrix);
+}
+
+wf::region_t calculate_region(const Spec spec) {
+    wf::region_t region;
+
+    const auto specs = subspecs(spec);
+    region |= RectSubSurf::calculate_region(specs.left);
+    region |= RectSubSurf::calculate_region(specs.right);
+    region |= RectSubSurf::calculate_region(specs.top);
+    region |= RectSubSurf::calculate_region(specs.bottom);
+
+    region |= CurveSubSurf::calculate_region(specs.top_left);
+    region |= CurveSubSurf::calculate_region(specs.top_right);
+    region |= CurveSubSurf::calculate_region(specs.bottom_left);
+    region |= CurveSubSurf::calculate_region(specs.bottom_right);
+
+    return region;
+}
+
+bool contains_point(Spec spec, wf::point_t pt) {
+    const auto specs = subspecs(spec);
+
+    return RectSubSurf::contains_point(specs.left, pt) ||
+           RectSubSurf::contains_point(specs.right, pt) ||
+           RectSubSurf::contains_point(specs.top, pt) ||
+           RectSubSurf::contains_point(specs.bottom, pt) ||
+
+           CurveSubSurf::contains_point(specs.top_left, pt) ||
+           CurveSubSurf::contains_point(specs.top_right, pt) ||
+           CurveSubSurf::contains_point(specs.bottom_left, pt) ||
+           CurveSubSurf::contains_point(specs.bottom_right, pt);
+}
+} // namespace BorderSubSurf
