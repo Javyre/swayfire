@@ -197,6 +197,12 @@ static uint id_counter;
 
 class Swayfire;
 
+class ISubSurface : public wf::view_interface_t {
+  public:
+    /// Handle the node's geometry changing.
+    virtual void on_geometry_changed(){};
+};
+
 struct Padding {
     int left, right, top, bottom;
 
@@ -235,7 +241,7 @@ struct Padding {
 };
 
 /// Interface for common functionality of nodes.
-class INode : public virtual IDisplay {
+class INode : public virtual IDisplay, public wf::object_base_t {
   protected:
     /// Whether this node is floating.
     ///
@@ -257,6 +263,8 @@ class INode : public virtual IDisplay {
     uint pure_set_geo = 0; ///< If non-zero, disables side-effects of
                            ///< set_geometry().
 
+    std::vector<std::unique_ptr<ISubSurface>> subsurfaces;
+
     INode() : node_id(id_counter) { id_counter++; }
 
   public:
@@ -268,6 +276,8 @@ class INode : public virtual IDisplay {
     std::optional<wf::dimensions_t> preferred_size = std::nullopt;
 
     NodeParent parent; ///< The parent of this node.
+
+    ~INode() override;
 
     /// Dynamic cast to SplitNodeRef.
     SplitNodeRef as_split_node();
@@ -309,6 +319,9 @@ class INode : public virtual IDisplay {
     /// This function does not refresh_geometry() for you.
     void add_padding(Padding padding);
 
+    /// Add a new subsurface to this node.
+    void add_subsurface(std::unique_ptr<ISubSurface> subsurf);
+
     /// Resize outer geometry to ndims if possible --by moving the given edges.
     ///
     /// The other edges remain in place while the moving edges move to achieve
@@ -343,8 +356,7 @@ class INode : public virtual IDisplay {
     };
 
     /// Set the sublayer of views in the subtree starting at this node.
-    virtual void
-    set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) = 0;
+    virtual void set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer);
 
     /// Bring this node's whole tree to the foreground.
     virtual void bring_to_front() = 0;
@@ -419,7 +431,7 @@ class ViewGeoEnforcer : public wf::view_2D {
 struct ViewData;
 
 /// A node corresponding to a wayfire view.
-class ViewNode : public INode, public wf::signal_provider_t {
+class ViewNode : public INode {
     friend ViewGeoEnforcer;
 
   private:
@@ -628,6 +640,9 @@ class SplitNode : public INode, public INodeParent {
 
     /// Return whether this split contains no children.
     bool empty() { return children.empty(); }
+
+    /// Return the amount of children nodes under this split node.
+    std::size_t get_children_count() { return children.size(); }
 
     /// Get a child of this split by index.
     Node child_at(std::size_t i) { return children.at(i).node.get(); }

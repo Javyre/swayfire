@@ -29,6 +29,9 @@ struct Options {
     wf::option_wrapper_t<int> border_width{"swayfire-deco/border_width"};
     wf::option_wrapper_t<int> border_radius{"swayfire-deco/border_radius"};
     wf::option_wrapper_t<bool> title_bar{"swayfire-deco/title_bar"};
+    /* wf::option_wrapper_t<int> title_bar_height{ */
+    /*     "swayfire-deco/title_bar_height"}; */
+    wf::option_wrapper_t<std::string> title_font{"swayfire-deco/title_font"};
 
     struct DecoColorSets {
         /// Focused deco color set.
@@ -219,6 +222,125 @@ class ViewDecoration : public wf::decorator_frame_t_t {
     */
 };
 
+class SplitDecoration : public ISubSurface, public wf::compositor_surface_t {
+  private:
+    const SplitNodeRef node; ///< The node we're decorating.
+
+    /// Whether the surface is mapped or not.
+    bool mapped = true;
+
+    /// The loaded options from the cfg.
+    nonstd::observer_ptr<Options> options;
+
+    /// The current color set.
+    nonstd::observer_ptr<DecorationColors> colors =
+        &(options->colors.unfocused);
+
+    void with_tabs_spec(
+        const std::function<void(TitleBarSubSurf &, TitleBarSubSurf::Spec)> &);
+
+    void
+    with_tabs_spec(const std::function<void(const TitleBarSubSurf &,
+                                            TitleBarSubSurf::Spec)> &) const;
+
+    void cache_textures();
+
+    std::vector<TitleBarSubSurf> tab_surfaces;
+
+    wf::geometry_t geometry{0, 0, 0, 20}; ///< Geometry of the decoration.
+
+    wf::region_t cached_region; ///< Cached minimal region containing this deco.
+
+    /// Calculate the minimal region that contains this decoration surface.
+    [[nodiscard]] wf::region_t calculate_region() const;
+
+    wf::signal_connection_t on_config_changed = [&](wf::signal_data_t *) {
+        // Refresh geometry in case border_width changes.
+        node->refresh_geometry();
+
+        // Refreshing the geometry may not actually change the geometry. (e.g.
+        // If only border_radius changes) So we still need to update the
+        // cached_region here.
+        cached_region = calculate_region();
+    };
+
+    wf::signal_connection_t on_child_inserted = [&](wf::signal_data_t *) {
+        tab_surfaces.emplace_back();
+        cache_textures();
+    };
+    wf::signal_connection_t on_child_swapped = [&](wf::signal_data_t *) {
+        cache_textures();
+    };
+    wf::signal_connection_t on_children_swapped = [&](wf::signal_data_t *) {
+        cache_textures();
+    };
+    wf::signal_connection_t on_child_removed = [&](wf::signal_data_t *) {
+        tab_surfaces.pop_back();
+        cache_textures();
+    };
+
+    wf::signal_connection_t on_detached = [&](wf::signal_data_t *) {
+        // TODO: remove the subsurface from the node
+        close();
+    };
+
+  public:
+    SplitDecoration(SplitNodeRef node, nonstd::observer_ptr<Options> options)
+        : node(node), options(options) {
+        for (std::size_t i = 0; i < node->get_children_count(); i++)
+            tab_surfaces.emplace_back();
+
+        // initialize geometry
+        on_geometry_changed();
+        /* wf::emit_map_state_change(this); */
+        /* damage(); */
+
+        /* node->connect_signal("geometry-changed", &on_geometry_changed); */
+        /* node->connect_signal("detached", &on_detached); */
+        node->connect_signal("child-inserted", &on_child_inserted);
+        node->connect_signal("child-swapped", &on_child_swapped);
+        node->connect_signal("children-swapped", &on_children_swapped);
+        node->connect_signal("child-removed", &on_child_removed);
+        // TODO: listen for split-type changed event
+
+        const auto output = node->get_ws()->output;
+        output->connect_signal("swf-deco-fini", &on_detached);
+        output->connect_signal("swf-deco-config-changed", &on_config_changed);
+    }
+
+    ~SplitDecoration() override {
+        const auto output = node->get_ws()->output;
+        output->disconnect_signal(&on_config_changed);
+        output->disconnect_signal(&on_detached);
+
+        node->disconnect_signal(&on_child_inserted);
+        node->disconnect_signal(&on_child_swapped);
+        node->disconnect_signal(&on_children_swapped);
+        node->disconnect_signal(&on_child_removed);
+        /* node->disconnect_signal(&on_detached); */
+    }
+
+    /// Damage the decoration region.
+    /* void damage(); */
+
+    // == Impl ISubSurface ==
+    void on_geometry_changed() override;
+
+    // == Impl wf::surface_interface_t ==
+    bool is_mapped() const override;
+    wf::dimensions_t get_size() const override;
+    bool accepts_input(int32_t sx, int32_t sy) override;
+    void simple_render(const wf::framebuffer_t &fb, int x, int y,
+                       const wf::region_t &damage) override;
+
+    // == Impl wf::view_interface_t ==
+    void move(int x, int y) override;
+    void close() override;
+    wf::geometry_t get_output_geometry() override;
+    wlr_surface *get_keyboard_focus_surface() override { return nullptr; }
+    bool is_focuseable() const override { return false; }
+};
+
 class SwayfireDeco : public SwayfirePlugin {
   private:
     /// Add decorations to the node.
@@ -227,6 +349,12 @@ class SwayfireDeco : public SwayfirePlugin {
     wf::signal_connection_t on_view_node_attached =
         [&](wf::signal_data_t *data) {
             auto vnode = get_signaled_view_node(data);
+            decorate_node(vnode);
+        };
+
+    wf::signal_connection_t on_split_node_created =
+        [&](wf::signal_data_t *data) {
+            auto vnode = get_signaled_split_node(data);
             decorate_node(vnode);
         };
 
