@@ -130,6 +130,177 @@ void DecorationSurface::simple_render(const wf::framebuffer_t &fb, int x, int y,
     OpenGL::render_end();
 }
 
+// SplitDecoration
+
+#define WITH_TABS_SPEC_IMPL                                                    \
+    const auto count = tab_surfaces.size();                                    \
+                                                                               \
+    for (std::size_t i = 0; i < count; i++) {                                  \
+        const TitleBarSubSurf::Spec spec = {                                   \
+            wf::geometry_t{                                                    \
+                (int)(i * (std::size_t)geometry.width / count),                \
+                0,                                                             \
+                (int)(geometry.width / (std::size_t)count),                    \
+                geometry.height,                                               \
+            },                                                                 \
+            {                                                                  \
+                0,                                                             \
+                0,                                                             \
+            }};                                                                \
+                                                                               \
+        f(tab_surfaces[i], spec);                                              \
+    }
+
+void SplitDecoration::with_tabs_spec(
+    const std::function<void(TitleBarSubSurf &tab, TitleBarSubSurf::Spec)> &f) {
+    WITH_TABS_SPEC_IMPL;
+}
+void SplitDecoration::with_tabs_spec(
+    const std::function<void(const TitleBarSubSurf &tab, TitleBarSubSurf::Spec)>
+        &f) const {
+    WITH_TABS_SPEC_IMPL;
+}
+#undef WITH_TABS_SPEC_IMPL
+
+void SplitDecoration::cache_textures() {
+    LOGD(node, ": split-deco: ", node->get_children_count(),
+         " == ", tab_surfaces.size());
+    assert(node->get_children_count() == tab_surfaces.size());
+
+    OpenGL::render_begin();
+    std::size_t i = 0;
+    with_tabs_spec([&](TitleBarSubSurf &tab, const auto spec) {
+        const auto child = node->child_at(i);
+        const std::string title =
+            static_cast<IDisplay *>(child.get())->to_string();
+
+        tab.cache_textures({
+            spec,
+            options->title_font.value(),
+            title,
+            wf::color_t(1, 1, 1, 1),
+        });
+        i++;
+    });
+    OpenGL::render_end();
+    damage();
+}
+
+// TODO: put this method in a base class and share it
+wf::region_t SplitDecoration::calculate_region() const {
+    /* wf::region_t region; */
+
+    /* with_tabs_spec([&](const auto &tab, const auto spec) { */
+    /*     region |= tab.calculate_region(spec); */
+    /* }); */
+
+    /* return region; */
+    return wf::geometry_t{0, 0, geometry.width, geometry.height};
+}
+
+void SplitDecoration::on_geometry_changed() {
+    auto inner_geo = node->get_inner_geometry();
+    LOGD(node, ": geo changed: ", inner_geo);
+
+    // Titlebars have constant height
+    const bool titlebar_size_changed = geometry.width != inner_geo.width;
+
+    geometry = wf::geometry_t{
+        inner_geo.x,
+        inner_geo.y - geometry.height,
+        inner_geo.width,
+        geometry.height,
+    };
+
+    if (titlebar_size_changed)
+        cache_textures();
+    cached_region = calculate_region();
+    damage();
+}
+
+bool SplitDecoration::is_mapped() const { return mapped; }
+
+wf::dimensions_t SplitDecoration::get_size() const {
+    return wf::dimensions(geometry);
+}
+
+bool SplitDecoration::accepts_input(int32_t sx, int32_t sy) {
+    bool r = false;
+
+    with_tabs_spec([&](const auto &tab, const auto spec) {
+        r = r || tab.contains_point(spec, {sx, sy});
+    });
+
+    return r;
+}
+
+void SplitDecoration::simple_render(const wf::framebuffer_t &fb, int x, int y,
+                                    const wf::region_t &damage) {
+    /* if (node->empty()) */
+    /*     return; */
+
+    const wf::region_t region = cached_region + wf::point_t{x, y};
+    wf::color_t color_spec = colors->child_border;
+
+    const wf::geometry_t region_extents =
+        wlr_box_from_pixman_box(region.get_extents());
+    const wf::geometry_t damage_extents =
+        wlr_box_from_pixman_box(damage.get_extents());
+
+    const wf::geometry_t bbox = get_untransformed_bounding_box();
+    LOGD(node, ": bbox = ", bbox);
+    LOGD(node, ": region = ", region_extents);
+    LOGD(node, ": damage = ", damage_extents);
+
+    /* if ((region & damage).empty()) */
+    /*     return; */
+
+    OpenGL::render_begin(fb);
+    for (const auto &scissor : region) {
+        fb.logic_scissor(wlr_box_from_pixman_box(scissor));
+
+        const auto matrix = fb.get_orthographic_projection();
+
+        int i = 0;
+        with_tabs_spec([&](const auto &tab, const auto spec) {
+            color_spec.g = color_spec.g * 2;
+            tab.render(spec, color_spec, {x, y}, matrix);
+            i++;
+        });
+    }
+    /* for (const auto &scissor : damage  & region) { */
+    /*     fb.logic_scissor(wlr_box_from_pixman_box(scissor)); */
+    /*     const auto matrix = fb.get_orthographic_projection(); */
+    /*     RectSubSurf::render(damage_extents, {1, 1, 0.1 * node->get_id(), 1},
+     * {0,0}, matrix); */
+    /* } */
+
+    OpenGL::render_end();
+}
+
+void SplitDecoration::move(int x, int y) {
+    LOGD("not moving split deco: ", x, ",", y);
+}
+
+void SplitDecoration::close() {
+    node->get_ws()->output->workspace->remove_view(this);
+    mapped = false;
+    wf::emit_map_state_change(this);
+    // TODO: remove padding here
+}
+
+wf::geometry_t SplitDecoration::get_output_geometry() {
+    const auto ws = node->get_ws();
+    const auto wsid = ws->wsid;
+    const auto curr_wsid = ws->output->workspace->get_current_workspace();
+    auto geo = geometry;
+
+    if (wsid != curr_wsid)
+        geo =
+            nonwf::local_to_relative_geometry(geo, wsid, curr_wsid, ws->output);
+    return geo;
+}
+
 // SwayfireDeco
 
 void SwayfireDeco::decorate_node(Node node) {
@@ -139,7 +310,12 @@ void SwayfireDeco::decorate_node(Node node) {
         vnode->view->set_decoration(std::move(deco));
     } else if (auto snode = node->as_split_node()) {
         // TODO: implement split node decorations.
-        (void)snode;
+        auto surf = std::make_unique<SplitDecoration>(snode, &options);
+        snode->add_padding({0, 0, 20, 0});
+        snode->add_subsurface(std::move(surf));
+        /* snode->store_data(std::make_unique<SplitDecoration>(snode,
+         * &options)); */
+        /* (void)snode; */
     }
 }
 
@@ -158,6 +334,7 @@ void SwayfireDeco::swf_init() {
     });
 
     output->connect_signal("swf-view-node-attached", &on_view_node_attached);
+    output->connect_signal("swf-split-node-attached", &on_split_node_created);
 
     options.set_callback(
         [&] { output->emit_signal("swf-deco-config-changed", nullptr); });

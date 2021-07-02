@@ -1,6 +1,8 @@
 #include "subsurf.hpp"
 
 #include <wayfire/opengl.hpp>
+#include <wayfire/plugins/common/cairo-util.hpp>
+#include <wayfire/util/log.hpp>
 
 // Shaders
 
@@ -161,6 +163,68 @@ bool contains_point(Spec spec, wf::point_t pt) {
 }
 } // namespace CurveSubSurf
 
+// TextSubSurf
+
+void TextSubSurf::cache_texture(CachedSpec spec) {
+    LOGD("Caching: ", spec.size.width, "x", spec.size.height);
+
+    constexpr auto format = CAIRO_FORMAT_ARGB32;
+    auto surface =
+        cairo_image_surface_create(format, spec.size.width, spec.size.height);
+    auto cr = cairo_create(surface);
+
+    constexpr float font_scale = 0.8;
+    const float font_size = (float)spec.size.height * font_scale;
+
+    // render text
+    const std::string font(spec.font);
+    cairo_select_font_face(cr, font.c_str(), CAIRO_FONT_SLANT_NORMAL,
+                           CAIRO_FONT_WEIGHT_NORMAL);
+    cairo_set_source_rgba(cr, spec.color.r, spec.color.g, spec.color.b,
+                          spec.color.a);
+
+    cairo_set_font_size(cr, font_size);
+    cairo_move_to(cr, 0, font_size);
+
+    /* cairo_text_extents_t ext; */
+    const std::string text(spec.text);
+    /* cairo_text_extents(cr, text.c_str(), &ext); */
+    cairo_show_text(cr, text.c_str());
+    cairo_destroy(cr);
+
+    cairo_surface_upload_to_texture(surface, texture);
+    cairo_surface_destroy(surface);
+}
+
+void TextSubSurf::render(Spec spec, wf::point_t origin,
+                         glm::mat4 matrix) const {
+    const wf::geometry_t geo = {
+        spec.x + origin.x,
+        spec.y + origin.y,
+        texture.width,
+        texture.height,
+    };
+    LOGD("text render: ", geo);
+
+    // TODO: see if we can instead set the color using this color multiplier
+    // parameter. That way we don't have to invalidate the cached texture every
+    // time we change the color.
+    OpenGL::render_transformed_texture(texture.tex, geo, matrix,
+                                       glm::vec4(1.0f),
+                                       OpenGL::TEXTURE_TRANSFORM_INVERT_Y);
+}
+
+[[nodiscard]] wf::region_t TextSubSurf::calculate_region(Spec spec) const {
+    (void)spec;
+    return {};
+}
+[[nodiscard]] bool TextSubSurf::contains_point(Spec spec,
+                                               wf::point_t pt) const {
+    (void)spec;
+    (void)pt;
+    return false;
+}
+
 // BorderSubSurf
 namespace BorderSubSurf {
 struct SubSpecs {
@@ -168,11 +232,15 @@ struct SubSpecs {
     const CurveSubSurf::Spec top_left, top_right, bottom_left, bottom_right;
 };
 
-inline SubSpecs subspecs(Spec spec) {
+inline SubSpecs get_subspecs(Spec spec) {
     return {
         // Left side
-        wf::geometry_t{0, spec.border_radius, spec.border_width,
-                       spec.geo.height - (2 * spec.border_radius)},
+        wf::geometry_t{
+            0,
+            spec.border_radius,
+            spec.border_width,
+            spec.geo.height - (2 * spec.border_radius),
+        },
         // Right side
         wf::geometry_t{
             spec.geo.width - spec.border_width,
@@ -233,7 +301,7 @@ inline SubSpecs subspecs(Spec spec) {
 
 void render(const Spec spec, Colors colors, wf::point_t origin,
             glm::mat4 matrix) {
-    const auto specs = subspecs(spec);
+    const auto specs = get_subspecs(spec);
     RectSubSurf::render(specs.left, colors.all, origin, matrix);
     RectSubSurf::render(specs.right, colors.right, origin, matrix);
     RectSubSurf::render(specs.top, colors.all, origin, matrix);
@@ -248,7 +316,7 @@ void render(const Spec spec, Colors colors, wf::point_t origin,
 wf::region_t calculate_region(const Spec spec) {
     wf::region_t region;
 
-    const auto specs = subspecs(spec);
+    const auto specs = get_subspecs(spec);
     region |= RectSubSurf::calculate_region(specs.left);
     region |= RectSubSurf::calculate_region(specs.right);
     region |= RectSubSurf::calculate_region(specs.top);
@@ -263,7 +331,7 @@ wf::region_t calculate_region(const Spec spec) {
 }
 
 bool contains_point(Spec spec, wf::point_t pt) {
-    const auto specs = subspecs(spec);
+    const auto specs = get_subspecs(spec);
 
     return RectSubSurf::contains_point(specs.left, pt) ||
            RectSubSurf::contains_point(specs.right, pt) ||
@@ -276,3 +344,57 @@ bool contains_point(Spec spec, wf::point_t pt) {
            CurveSubSurf::contains_point(specs.bottom_right, pt);
 }
 } // namespace BorderSubSurf
+
+// TitleBarSubSurf
+
+void TitleBarSubSurf::cache_textures(CachedSpec spec) {
+    title_text.cache_texture({
+        // size
+        wf::dimensions(spec.spec.geo),
+
+        // font
+        spec.font,
+
+        // text
+        spec.title,
+
+        // color
+        spec.title_color,
+
+    });
+}
+
+auto TitleBarSubSurf::get_subspecs(Spec spec) -> SubSpecs {
+    return {
+        // rect
+        spec.geo,
+
+        // text
+        {spec.geo.x, spec.geo.y},
+    };
+}
+
+void TitleBarSubSurf::render(Spec spec, wf::color_t color, wf::point_t origin,
+                             glm::mat4 matrix) const {
+    const auto specs = get_subspecs(spec);
+    RectSubSurf::render(specs.rect, color, origin, matrix);
+    title_text.render(specs.text, origin, matrix);
+}
+
+[[nodiscard]] wf::region_t TitleBarSubSurf::calculate_region(Spec spec) const {
+    wf::region_t region;
+
+    const auto specs = get_subspecs(spec);
+    region |= RectSubSurf::calculate_region(specs.rect);
+    region |= title_text.calculate_region(specs.text);
+
+    return region;
+}
+
+[[nodiscard]] bool TitleBarSubSurf::contains_point(Spec spec,
+                                                   wf::point_t pt) const {
+    const auto specs = get_subspecs(spec);
+
+    return RectSubSurf::contains_point(specs.rect, pt) ||
+           title_text.contains_point(specs.text, pt);
+}

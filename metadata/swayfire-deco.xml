@@ -22,6 +22,12 @@
         <default>false</default>
     </option>
 
+		<option name="title_font" type="string">
+			<_short>Font</_short>
+			<_long>Sets the font to use for the title bars.</_long>
+			<default>sans-serif</default>
+		</option>
+
     <option name="focused.border" type="color">
         <_short>Focused node border color</_short>
         <_long>A node which currently has the focus.</_long>
