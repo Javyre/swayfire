@@ -350,7 +350,10 @@ class INode : public virtual IDisplay {
     virtual void bring_to_front() = 0;
 
     /// Make this node the active selected node in its workspace.
-    virtual void set_active();
+    void set_active();
+
+    /// Handle this node being made the active node of its workspace.
+    virtual void on_set_active() {}
 
     /// Try to (un)tile this node in its workspace.
     void tile_request(bool tile);
@@ -496,7 +499,7 @@ class ViewNode : public INode, public wf::signal_provider_t {
     void set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) override;
     void bring_to_front() override;
     void set_ws(WorkspaceRef ws) override;
-    void set_active() override;
+    void on_set_active() override;
     NodeParent get_or_upgrade_to_parent_node() override;
     void for_each_node(const std::function<void(Node)> &f) override;
 

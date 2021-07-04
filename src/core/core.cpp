@@ -86,11 +86,7 @@ void INode::set_floating(bool fl) {
     floating = fl;
 };
 
-void INode::set_active() {
-    parent->set_active_child(this);
-    ws->set_active_node(this);
-    find_root_parent()->bring_to_front();
-}
+void INode::set_active() { get_ws()->set_active_node(this); }
 
 void INode::tile_request(const bool tile) {
     get_ws()->tile_request(this, tile);
@@ -340,9 +336,7 @@ void ViewNode::set_ws(WorkspaceRef ws) {
     }
 }
 
-void ViewNode::set_active() {
-    INode::set_active();
-
+void ViewNode::on_set_active() {
     for (auto view : view->enumerate_views())
         if (view->activated)
             return;
@@ -912,7 +906,16 @@ Workspace::~Workspace() {
     output->workspace->destroy_sublayer(floating_sublayer);
 }
 
-void Workspace::set_active_node(Node node) { active_node = node; }
+void Workspace::set_active_node(Node node) {
+    active_node = node;
+
+    if (!node)
+        return;
+
+    node->parent->set_active_child(node);
+    node->find_root_parent()->bring_to_front();
+    node->on_set_active();
+}
 
 Node Workspace::get_active_node() {
     assert(active_node && "There should always be a valid active node set.");
