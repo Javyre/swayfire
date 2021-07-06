@@ -27,6 +27,9 @@ Notable planned features:
 
 ## Installation
 
+Swayfire depends on Wayfire's master branch. Please make sure it is installed
+before building Swayfire.
+
 To build and install from source:
 ```sh
 # Generate the build directory:
