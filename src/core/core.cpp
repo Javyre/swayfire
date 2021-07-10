@@ -109,6 +109,12 @@ bool INode::move(Direction dir) {
         }
     }
 
+    // Refresh the active node to trigger any node activation tree updates.
+    // (e.g. bring_to_front() on the new root parent and set_active_child() on
+    // the new parents).
+    if (this == get_ws()->get_active_node().get())
+        get_ws()->set_active_node(this);
+
     return true;
 }
 
@@ -515,9 +521,7 @@ void SplitNode::set_active_child(Node node) {
     parent->set_active_child(this);
 }
 
-Node SplitNode::get_active_child() const {
-    return child_at(active_child);
-}
+Node SplitNode::get_active_child() const { return child_at(active_child); }
 
 void SplitNode::set_split_type(SplitType st) {
     if (is_split())
