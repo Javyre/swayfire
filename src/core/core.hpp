@@ -188,6 +188,9 @@ class INodeParent : public virtual IDisplay {
     ///
     /// This call should bubble up to the root parent.
     virtual void set_active_child(Node node) = 0;
+
+    /// Get this parent's last active child.
+    virtual Node get_active_child() const = 0;
 };
 
 using NodeParent = nonstd::observer_ptr<INodeParent>;
@@ -633,7 +636,7 @@ class SplitNode : public INode, public INodeParent {
     bool empty() { return children.empty(); }
 
     /// Get a child of this split by index.
-    Node child_at(std::size_t i) { return children.at(i).node.get(); }
+    Node child_at(std::size_t i) const { return children.at(i).node.get(); }
 
     /// Return whether this is a v/h-split.
     bool is_split() {
@@ -691,6 +694,7 @@ class SplitNode : public INode, public INodeParent {
     OwnedNode swap_child(Node node, OwnedNode other) override;
     void swap_children(Node a, Node b) override;
     void set_active_child(Node node) override;
+    Node get_active_child() const override;
 
     // == INode impl ==
 
@@ -858,6 +862,7 @@ class Workspace : public INodeParent {
     OwnedNode swap_child(Node node, OwnedNode other) override;
     void swap_children(Node a, Node b) override;
     void set_active_child(Node node) override;
+    Node get_active_child() const override;
 
     // == IDisplay impl ==
 

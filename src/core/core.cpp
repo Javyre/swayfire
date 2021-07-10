@@ -515,6 +515,10 @@ void SplitNode::set_active_child(Node node) {
     parent->set_active_child(this);
 }
 
+Node SplitNode::get_active_child() const {
+    return child_at(active_child);
+}
+
 void SplitNode::set_split_type(SplitType st) {
     if (is_split())
         was_vsplit = split_type == SplitType::VSPLIT;
@@ -1134,6 +1138,10 @@ void Workspace::set_active_child(Node node) {
             node.get() == tiled_root.node.get() &&
             "set_active_child should only be called on direct children nodes.");
     }
+}
+
+Node Workspace::get_active_child() const {
+    return active_node->find_root_parent();
 }
 
 void Workspace::set_workarea(wf::geometry_t geo) {
