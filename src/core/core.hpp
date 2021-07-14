@@ -260,6 +260,12 @@ class INode : public virtual IDisplay {
     uint pure_set_geo = 0; ///< If non-zero, disables side-effects of
                            ///< set_geometry().
 
+    /// Whether this node has been fully initialized yet.
+    bool initialized = false;
+
+    /// Handle this node having been initialized.
+    virtual void on_initialized() = 0;
+
     INode() : node_id(id_counter) { id_counter++; }
 
   public:
@@ -277,6 +283,11 @@ class INode : public virtual IDisplay {
 
     /// Dynamic cast to ViewNodeRef.
     ViewNodeRef as_view_node();
+
+    /// Notify the node that it has been initialized.
+    ///
+    /// Noop if node is already initialized
+    void notify_initialized();
 
     /// Get the outer geometry of the node.
     wf::geometry_t get_geometry() { return geometry; }
@@ -497,11 +508,11 @@ class ViewNode : public INode, public wf::signal_provider_t {
 
     // == INode impl ==
 
+    void on_initialized() override;
     void set_geometry(wf::geometry_t geo) override;
     void set_floating(bool fl) override;
     void set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) override;
     void bring_to_front() override;
-    void set_ws(WorkspaceRef ws) override;
     void on_set_active() override;
     NodeParent get_or_upgrade_to_parent_node() override;
     void for_each_node(const std::function<void(Node)> &f) override;
@@ -698,6 +709,7 @@ class SplitNode : public INode, public INodeParent {
 
     // == INode impl ==
 
+    void on_initialized() override;
     void set_geometry(wf::geometry_t geo) override;
     void begin_resize() override;
     void end_resize() override;

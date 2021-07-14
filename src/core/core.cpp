@@ -74,6 +74,15 @@ SplitNodeRef INode::as_split_node() { return dynamic_cast<SplitNode *>(this); }
 
 ViewNodeRef INode::as_view_node() { return dynamic_cast<ViewNode *>(this); }
 
+void INode::notify_initialized() {
+    if (initialized)
+        return;
+
+    initialized = true;
+    LOGD(this, " initialized");
+    on_initialized();
+}
+
 void INode::add_padding(Padding padding) { this->padding += padding; }
 
 void INode::set_floating(bool fl) {
@@ -263,6 +272,16 @@ void ViewNode::set_floating(bool fl) {
     view->set_tiled(fl ? 0 : wf::TILED_EDGES_ALL);
 }
 
+void ViewNode::on_initialized() {
+    // It's probably dangerous to send out this signal and start changing
+    // unmapped views' geomtries.
+    assert(view->is_mapped());
+
+    ViewNodeSignalData data = {};
+    data.node = this;
+    ws->output->emit_signal("swf-view-node-attached", &data);
+}
+
 void ViewNode::set_geometry(const wf::geometry_t geo) {
     geometry = geo;
     if (pure_set_geo)
@@ -325,21 +344,6 @@ void ViewNode::bring_to_front() {
 
     for (auto v : views)
         v->damage();
-}
-
-void ViewNode::set_ws(WorkspaceRef ws) {
-    auto old_ws = get_ws();
-    INode::set_ws(ws);
-
-    if (!old_ws && ws) {
-        // It's probably dangerous to send out this signal and start changing
-        // unmapped views' geomtries.
-        assert(view->is_mapped());
-
-        ViewNodeSignalData data = {};
-        data.node = this;
-        ws->output->emit_signal("swf-view-node-attached", &data);
-    }
 }
 
 void ViewNode::on_set_active() {
@@ -405,6 +409,7 @@ void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
     node->set_floating(false);
     node->set_ws(get_ws());
     node->set_sublayer(get_ws()->get_child_sublayer(find_root_parent()));
+    node->notify_initialized();
 
     double total_ratio = 0;
     if (!children.empty()) {
@@ -573,7 +578,9 @@ OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
     other->set_ws(get_ws());
     other->set_geometry(child->node->get_geometry());
 
-    child->node.swap(other);
+    std::swap(child->node, other);
+
+    child->node->notify_initialized();
 
     return other;
 }
@@ -814,17 +821,16 @@ void SplitNode::bring_to_front() {
 }
 
 void SplitNode::set_ws(WorkspaceRef ws) {
-    auto old_ws = get_ws();
     INode::set_ws(ws);
-
-    if (!old_ws && ws) {
-        SplitNodeSignalData data = {};
-        data.node = this;
-        ws->output->emit_signal("swf-split-node-attached", &data);
-    }
 
     for (auto &child : children)
         child.node->set_ws(ws);
+}
+
+void SplitNode::on_initialized() {
+    SplitNodeSignalData data = {};
+    data.node = this;
+    ws->output->emit_signal("swf-split-node-attached", &data);
 }
 
 void SplitNode::set_geometry(const wf::geometry_t geo) {
@@ -935,6 +941,7 @@ void Workspace::insert_floating_node(OwnedNode node) {
     node->set_floating(true);
     node->set_ws(this);
     node->set_sublayer(floating_sublayer);
+    node->notify_initialized();
 
     floating_nodes.push_back({std::move(node), floating_sublayer});
 }
@@ -981,8 +988,9 @@ OwnedNode Workspace::swap_floating_node(Node node, OwnedNode other) {
     other->set_sublayer(child->sublayer);
 
     // swap the pointers
-    child->node.swap(other);
+    std::swap(child->node, other);
 
+    child->node->notify_initialized();
     return other;
 }
 
@@ -1002,6 +1010,7 @@ Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
     tiled_root.node->set_floating(false);
     tiled_root.node->set_ws(this);
     tiled_root.node->set_sublayer(tiled_root.sublayer);
+    tiled_root.node->notify_initialized();
 
     return ret;
 }
