@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <wayfire>
-	<plugin name="swayfire-deco">
-	<_short>Swayfire Decorations</_short>
-	<_long>Tiling window manager inspired by Sway - Decorations plugin</_long>
-	<category>Effects</category>
+    <plugin name="swayfire-deco">
+    <_short>Swayfire Decorations</_short>
+    <_long>Tiling window manager inspired by Sway - Decorations plugin</_long>
+    <category>Effects</category>
     <option name="border_width" type="int">
         <_short>Border width</_short>
         <_long>Border width of node decorations.</_long>
@@ -20,6 +20,12 @@
         <_short>Enable titles</_short>
         <_long>Enable title bar in decorations.</_long>
         <default>false</default>
+    </option>
+
+    <option name="title_font" type="string">
+        <_short>Font</_short>
+        <_long>Sets the font to use for the title bars.</_long>
+        <default>sans-serif</default>
     </option>
 
     <option name="focused.border" type="color">
@@ -105,5 +111,5 @@
         <default>0.13 0.13 0.13 1.0</default>
     </option>
 
-	</plugin>
+    </plugin>
 </wayfire>

@@ -70,6 +70,11 @@ SplitNodeRef INodeParent::as_split_node() {
 
 // INode
 
+INode::~INode() {
+    for (auto &subsurf : subsurfaces)
+        subsurf->close();
+}
+
 SplitNodeRef INode::as_split_node() { return dynamic_cast<SplitNode *>(this); }
 
 ViewNodeRef INode::as_view_node() { return dynamic_cast<ViewNode *>(this); }
@@ -85,6 +90,23 @@ void INode::notify_initialized() {
 
 void INode::add_padding(Padding padding) { this->padding += padding; }
 
+void INode::add_subsurface(wayfire_view subsurf) {
+    const auto ws = get_ws();
+    const auto sublayer = ws->get_child_sublayer(find_root_parent());
+    assert(sublayer);
+    subsurf->set_output(ws->output.get());
+    subsurf->set_role(wf::VIEW_ROLE_DESKTOP_ENVIRONMENT);
+    ws->output->workspace->add_view_to_sublayer(subsurf, sublayer);
+
+    subsurfaces.push_back(subsurf);
+}
+
+void INode::remove_subsurface(wayfire_view subsurf) {
+    const auto ss = std::find(subsurfaces.begin(), subsurfaces.end(), subsurf);
+    assert(ss != subsurfaces.end());
+    subsurfaces.erase(ss);
+}
+
 void INode::set_floating(bool fl) {
     if (!floating && fl)
         set_geometry(floating_geometry);
@@ -94,6 +116,20 @@ void INode::set_floating(bool fl) {
 
     floating = fl;
 };
+
+void INode::set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) {
+    assert(sublayer.get() != nullptr);
+
+    const auto &workspace = get_ws()->output->workspace;
+    for (auto &subsurf : subsurfaces)
+        workspace->add_view_to_sublayer(subsurf, sublayer);
+}
+
+void INode::bring_to_front() {
+    auto &wfws = get_ws()->output->workspace;
+    for (const auto &view : subsurfaces)
+        wfws->bring_to_front(view);
+}
 
 void INode::set_active() { get_ws()->set_active_node(this); }
 
@@ -283,9 +319,15 @@ void ViewNode::on_initialized() {
 }
 
 void ViewNode::set_geometry(const wf::geometry_t geo) {
+    const auto old_geo = geometry;
     geometry = geo;
     if (pure_set_geo)
         return;
+
+    GeometryChangedSignalData data;
+    data.old_geo = old_geo;
+    data.new_geo = geometry;
+    emit_signal("geometry-changed", &data);
 
     auto inner = get_inner_geometry();
 
@@ -328,11 +370,13 @@ void ViewNode::set_prefered_split_type(std::optional<SplitType> split_type) {
 }
 
 void ViewNode::set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) {
-    assert(sublayer.get() != nullptr);
+    INode::set_sublayer(sublayer);
     get_ws()->output->workspace->add_view_to_sublayer(view, sublayer);
 }
 
 void ViewNode::bring_to_front() {
+    INode::bring_to_front();
+
     auto &wfws = get_ws()->output->workspace;
     wfws->bring_to_front(view);
 
@@ -434,6 +478,8 @@ void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
     if (is_split())
         sync_sizes_to_ratios();
 
+    emit_signal("child-inserted", nullptr);
+
     refresh_geometry();
 }
 
@@ -507,6 +553,8 @@ OwnedNode SplitNode::remove_child_at(SplitChildIter child) {
             sync_sizes_to_ratios();
     }
 
+    emit_signal("child-removed", nullptr);
+
     refresh_geometry();
 
     owned_node->parent = nullptr;
@@ -533,6 +581,7 @@ void SplitNode::set_split_type(SplitType st) {
         was_vsplit = split_type == SplitType::VSPLIT;
     split_type = st;
     refresh_geometry();
+    emit_signal("split-type-changed", nullptr);
 }
 
 Node SplitNode::try_downgrade() {
@@ -582,6 +631,8 @@ OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
 
     child->node->notify_initialized();
 
+    emit_signal("child-swapped", nullptr);
+
     return other;
 }
 
@@ -595,6 +646,9 @@ void SplitNode::swap_children(Node a, Node b) {
         LOGE("Node ", b, " not found in split node: ", this);
 
     std::iter_swap(child_a, child_b);
+
+    emit_signal("children-swapped", nullptr);
+
     refresh_geometry();
 }
 
@@ -804,11 +858,14 @@ bool SplitNode::move_child(Node node, Direction dir) {
 }
 
 void SplitNode::set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) {
+    INode::set_sublayer(sublayer);
     for (auto &child : children)
         child.node->set_sublayer(sublayer);
 }
 
 void SplitNode::bring_to_front() {
+    INode::bring_to_front();
+
     const auto ac = empty() ? nullptr : children.at(active_child).node.get();
 
     for (auto &child : children)
@@ -834,16 +891,22 @@ void SplitNode::on_initialized() {
 }
 
 void SplitNode::set_geometry(const wf::geometry_t geo) {
+    const auto old_geo = geometry;
     geometry = geo;
 
     if (children.empty()) {
-        if (parent->as_split_node() != nullptr)
+        if (parent->as_split_node())
             LOGE(this, ": Attempt to set geometry of empty split node.");
         return;
     }
 
     if (pure_set_geo)
         return;
+
+    GeometryChangedSignalData data;
+    data.old_geo = old_geo;
+    data.new_geo = geometry;
+    emit_signal("geometry-changed", &data);
 
     auto inner = get_inner_geometry();
 
@@ -905,7 +968,7 @@ Workspace::Workspace(wf::point_t wsid, wf::geometry_t geo,
     tiled_root.sublayer = output->workspace->create_sublayer(
         wf::LAYER_WORKSPACE, wf::SUBLAYER_FLOATING);
     (void)swap_tiled_root(std::make_unique<SplitNode>(geo));
-    LOGD("ws created with root ", tiled_root.node->to_string());
+    LOGD("ws created with root ", tiled_root.node.get());
     active_node = tiled_root.node;
 
     floating_sublayer = output->workspace->create_sublayer(
@@ -921,7 +984,13 @@ Workspace::~Workspace() {
 }
 
 void Workspace::set_active_node(Node node) {
+    const auto old_node = active_node;
     active_node = node;
+
+    ActiveNodeChangedSignalData data;
+    data.old_node = old_node;
+    data.new_node = active_node;
+    output->emit_signal("swf-active-node-changed", &data);
 
     if (!node)
         return;

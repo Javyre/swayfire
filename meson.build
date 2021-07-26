@@ -16,6 +16,7 @@ project(
 wayfire = dependency('wayfire')
 wlroots = dependency('wlroots')
 wfconfig = dependency('wf-config')
+cairo = dependency('cairo')
 pixman = dependency('pixman-1')
 
 add_project_arguments(['-DWLR_USE_UNSTABLE'], language: ['cpp', 'c'])
