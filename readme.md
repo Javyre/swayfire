@@ -56,5 +56,5 @@ yay -S swayfire-git
 Contributions are welcome.
 
 Swayfire uses the `c++17` standard and a modified `llvm` coding style
-defined in `.clang_format`. Please run `nina -C build clang-format`
+defined in `.clang_format`. Please run `ninja -C build clang-format`
 to run the formatter before every commit.
