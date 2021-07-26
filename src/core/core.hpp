@@ -23,6 +23,8 @@
 #include <wayfire/view-transform.hpp>
 #include <wayfire/workspace-manager.hpp>
 
+#include "signals.hpp"
+
 constexpr uint32_t FLOATING_MOVE_STEP = 5;
 constexpr int32_t MIN_VIEW_SIZE = 20;
 
@@ -221,6 +223,9 @@ struct Padding {
 
     Padding operator-() const { return {-left, -right, -top, -bottom}; }
 
+    /// Return false if the padding is empty.
+    operator bool() { return left || right || top || bottom; }
+
     /// Add the padding area to the geometry.
     friend wf::geometry_t operator+(const wf::geometry_t &a, const Padding &b) {
         wf::geometry_t res = a;
@@ -238,7 +243,7 @@ struct Padding {
 };
 
 /// Interface for common functionality of nodes.
-class INode : public virtual IDisplay {
+class INode : public virtual IDisplay, public wf::object_base_t {
   protected:
     /// Whether this node is floating.
     ///
@@ -260,6 +265,10 @@ class INode : public virtual IDisplay {
     uint pure_set_geo = 0; ///< If non-zero, disables side-effects of
                            ///< set_geometry().
 
+    /// Views attached to this node. Equivalent of view subsurfaces, but for
+    /// nodes.
+    std::vector<wayfire_view> subsurfaces;
+
     /// Whether this node has been fully initialized yet.
     bool initialized = false;
 
@@ -277,6 +286,8 @@ class INode : public virtual IDisplay {
     std::optional<wf::dimensions_t> preferred_size = std::nullopt;
 
     NodeParent parent; ///< The parent of this node.
+
+    ~INode() override;
 
     /// Dynamic cast to SplitNodeRef.
     SplitNodeRef as_split_node();
@@ -323,6 +334,12 @@ class INode : public virtual IDisplay {
     /// This function does not refresh_geometry() for you.
     void add_padding(Padding padding);
 
+    /// Add a new subsurface to this node.
+    void add_subsurface(wayfire_view subsurf);
+
+    /// Remove a subsurface from this node.
+    void remove_subsurface(wayfire_view subsurf);
+
     /// Resize outer geometry to ndims if possible --by moving the given edges.
     ///
     /// The other edges remain in place while the moving edges move to achieve
@@ -357,11 +374,10 @@ class INode : public virtual IDisplay {
     };
 
     /// Set the sublayer of views in the subtree starting at this node.
-    virtual void
-    set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) = 0;
+    virtual void set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer);
 
     /// Bring this node's whole tree to the foreground.
-    virtual void bring_to_front() = 0;
+    virtual void bring_to_front();
 
     /// Make this node the active selected node in its workspace.
     void set_active();
@@ -405,7 +421,7 @@ class INode : public virtual IDisplay {
 ///
 /// Currently waiting on https://github.com/WayfireWM/wayfire/issues/995 which
 /// is planned for wayfire 0.9.
-class ViewGeoEnforcer : public wf::view_2D {
+class ViewGeoEnforcer final : public wf::view_2D {
   private:
     ViewNodeRef view_node;
 
@@ -436,7 +452,7 @@ class ViewGeoEnforcer : public wf::view_2D {
 struct ViewData;
 
 /// A node corresponding to a wayfire view.
-class ViewNode : public INode, public wf::signal_provider_t {
+class ViewNode final : public INode {
     friend ViewGeoEnforcer;
 
   private:
@@ -534,18 +550,6 @@ struct ViewData : wf::custom_data_t {
     ViewData(ViewNodeRef node) : node(node) {}
 };
 
-/// Data passed on view-node signals emitted from swayfire
-struct ViewNodeSignalData : wf::signal_data_t {
-    /// The node that triggered the signal
-    ViewNodeRef node;
-};
-
-/// Data passed on split-node signals emitted from swayfire
-struct SplitNodeSignalData : wf::signal_data_t {
-    /// The node that triggered the signal
-    SplitNodeRef node;
-};
-
 /// Get the ViewNode corresponding to the wayfire view.
 ///
 /// \return The ViewNode of the view or nullptr.
@@ -584,7 +588,7 @@ struct SplitChild {
 using SplitChildIter = std::vector<SplitChild>::iterator;
 
 /// A split node containing children.
-class SplitNode : public INode, public INodeParent {
+class SplitNode final : public INode, public INodeParent {
   private:
     SplitType split_type;             ///< The split type of this node.
     uint32_t active_child = 0;        ///< Index of last active child.
@@ -645,6 +649,9 @@ class SplitNode : public INode, public INodeParent {
 
     /// Return whether this split contains no children.
     bool empty() { return children.empty(); }
+
+    /// Return the amount of children nodes under this split node.
+    std::size_t get_children_count() { return children.size(); }
 
     /// Get a child of this split by index.
     Node child_at(std::size_t i) const { return children.at(i).node.get(); }
@@ -728,7 +735,7 @@ class SplitNode : public INode, public INodeParent {
 };
 
 /// A single workspace managing a tiled tree and floating nodes.
-class Workspace : public INodeParent {
+class Workspace final : public INodeParent {
   private:
     /// The root node of a workspace layer.
     template <typename N> struct WorkspaceRoot {
@@ -888,7 +895,6 @@ class Workspace : public INodeParent {
 class Workspaces {
     friend Swayfire;
 
-  private:
     /// Workspace tree roots: workspaces[x][y].
     std::vector<std::vector<std::unique_ptr<Workspace>>> workspaces;
 
@@ -905,7 +911,7 @@ class Workspaces {
 };
 
 /// Custom wayfire workspace implementation.
-class SwayfireWorkspaceImpl : public wf::workspace_implementation_t {
+class SwayfireWorkspaceImpl final : public wf::workspace_implementation_t {
   public:
     bool view_movable(wayfire_view view) override {
         if (auto node = get_view_node(view))
@@ -933,7 +939,7 @@ class IActiveButtonDrag;
 class ActiveMove;
 class ActiveResize;
 
-class Swayfire : public wf::plugin_interface_t {
+class Swayfire final : public wf::plugin_interface_t {
   public:
     /// The workspaces manages by swayfire.
     Workspaces workspaces;

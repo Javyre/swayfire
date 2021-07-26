@@ -47,7 +47,7 @@ class IActiveButtonDrag : public IActiveGrab {
 };
 
 /// Button drag view move gesture.
-class ActiveMove : public IActiveButtonDrag {
+class ActiveMove final : public IActiveButtonDrag {
   private:
     /// The node being dragged.
     Node dragged;
@@ -71,7 +71,7 @@ class ActiveMove : public IActiveButtonDrag {
 };
 
 /// Button drag view resize gesture.
-class ActiveResize : public IActiveButtonDrag {
+class ActiveResize final : public IActiveButtonDrag {
   private:
     /// The node being resized.
     Node dragged;

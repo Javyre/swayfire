@@ -11,7 +11,7 @@ all_src += files([
 
 swayfire_deco = shared_module('swayfire-deco', plugin_src,
     cpp_pch: ['../pch/prefix.hpp'],
-    dependencies: [wayfire, wlroots, pixman],
+    dependencies: [wayfire, wlroots, pixman, cairo],
     link_with: swayfire_core,
     install_rpath: get_option('prefix') / get_option('libdir') / 'wayfire',
     install: true,
