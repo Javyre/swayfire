@@ -275,6 +275,9 @@ class INode : public virtual IDisplay, public wf::object_base_t {
     /// Handle this node having been initialized.
     virtual void on_initialized() = 0;
 
+    /// Close all the subsurfaces of this node.
+    void close_subsurfaces();
+
     INode() : node_id(id_counter) { id_counter++; }
 
   public:
@@ -286,8 +289,6 @@ class INode : public virtual IDisplay, public wf::object_base_t {
     std::optional<wf::dimensions_t> preferred_size = std::nullopt;
 
     NodeParent parent; ///< The parent of this node.
-
-    ~INode() override;
 
     /// Dynamic cast to SplitNodeRef.
     SplitNodeRef as_split_node();
@@ -646,6 +647,8 @@ class SplitNode final : public INode, public INodeParent {
         geometry = geo;
         floating_geometry = geo;
     }
+
+    ~SplitNode() override;
 
     /// Return whether this split contains no children.
     bool empty() { return children.empty(); }
