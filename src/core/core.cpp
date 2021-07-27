@@ -70,7 +70,7 @@ SplitNodeRef INodeParent::as_split_node() {
 
 // INode
 
-INode::~INode() {
+void INode::close_subsurfaces() {
     for (auto &subsurf : subsurfaces)
         subsurf->close();
 }
@@ -261,6 +261,8 @@ ViewNode::~ViewNode() {
     emit_signal("detached", &data);
     get_ws()->output->emit_signal("swf-view-node-detached", &data);
 
+    close_subsurfaces();
+
     view->disconnect_signal(&on_geometry_changed);
     view->disconnect_signal(&on_unmapped);
     view->disconnect_signal(&on_mapped);
@@ -408,6 +410,13 @@ NodeParent ViewNode::get_or_upgrade_to_parent_node() {
 void ViewNode::for_each_node(const std::function<void(Node)> &f) { f(this); }
 
 // SplitNode
+
+SplitNode::~SplitNode() {
+    // NOTE: we can't just put this line in the base INode destructor since by
+    // then the SplitNode is destructed and the subsurfaces' close()
+    // implementation will be calling undefined methods.
+    close_subsurfaces();
+}
 
 void SplitNode::sync_ratios_to_sizes() {
     assert("Cannot sync ratios to sizes when children are stacked." &&
