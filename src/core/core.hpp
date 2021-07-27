@@ -1028,6 +1028,17 @@ class Swayfire final : public wf::plugin_interface_t {
     /// Handle views being focused.
     wf::signal_connection_t on_view_focused = [&](wf::signal_data_t *data) {
         if (const auto node = get_signaled_view_node(data)) {
+            // A potential side-effect of removing a view in a
+            // "A.insert_node(B.remove_node())" operation is that in between the
+            // two operations, some node is destroyed (e.g. a split downgrade)
+            // and this could cause the output to be refocused when the node's
+            // subsurfaces are close()'d.
+            // TODO: see if the upcoming wayfire transactions api can avoid this
+            // problem by making node "A.insert_node(B.remove_node())" more
+            // atomic.
+            if (!node->parent)
+                return;
+
             if (node->get_ws()->wsid !=
                 output->workspace->get_current_workspace()) {
                 if (auto floating = node->find_floating_parent()) {
