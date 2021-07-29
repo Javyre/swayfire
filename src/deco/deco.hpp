@@ -259,10 +259,10 @@ class SplitDecoration final : public wf::view_interface_t,
 
     struct {
         /// Whether the node is active.
-        bool is_active;
+        bool is_active = false;
 
         /// Whether an (in)direct child of this node is active.
-        bool is_child_active;
+        bool is_child_active = false;
     } node_state;
 
     /// The tab subsurfaces abstracting the rendering and caching of their
