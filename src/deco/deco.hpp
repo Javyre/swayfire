@@ -334,21 +334,30 @@ class SplitDecoration final : public wf::view_interface_t,
             damage();
         };
 
-    void on_child_inserted_impl();
-    wf::signal_connection_t on_child_inserted = [&](wf::signal_data_t *) {
-        on_child_inserted_impl();
+    wf::signal_connection_t on_title_changed = [&](wf::signal_data_t *) {
+        cache_textures();
     };
 
-    wf::signal_connection_t on_child_swapped = [&](wf::signal_data_t *) {
+    void on_child_inserted_impl(NodeSignalData *data);
+    wf::signal_connection_t on_child_inserted = [&](wf::signal_data_t *data) {
+        on_child_inserted_impl(dynamic_cast<NodeSignalData *>(data));
+    };
+
+    wf::signal_connection_t on_child_swapped = [&](wf::signal_data_t *data_) {
+        const auto data = dynamic_cast<ChildSwappedSignalData *>(data_);
+
+        data->old_node->disconnect_signal(&on_title_changed);
+        data->new_node->connect_signal("title-changed", &on_title_changed);
+
         cache_textures();
     };
     wf::signal_connection_t on_children_swapped = [&](wf::signal_data_t *) {
         cache_textures();
     };
 
-    void on_child_removed_impl();
-    wf::signal_connection_t on_child_removed = [&](wf::signal_data_t *) {
-        on_child_removed_impl();
+    void on_child_removed_impl(NodeSignalData *data);
+    wf::signal_connection_t on_child_removed = [&](wf::signal_data_t *data) {
+        on_child_removed_impl(dynamic_cast<NodeSignalData *>(data));
     };
 
     wf::signal_connection_t on_split_type_changed = [&](wf::signal_data_t *) {
@@ -387,6 +396,12 @@ class SplitDecoration final : public wf::view_interface_t,
 
     ~SplitDecoration() override {
         node->erase_data<SplitDecorationData>();
+
+        {
+            const std::size_t children_count = node->get_children_count();
+            for (std::size_t i = 0; i < children_count; i++)
+                node->child_at(i)->disconnect_signal(&on_title_changed);
+        }
 
         const auto output = node->get_ws()->output;
         output->disconnect_signal(&on_config_changed);

@@ -191,8 +191,7 @@ void SplitDecoration::cache_textures() {
     std::size_t i = 0;
     with_tabs_spec([&](TitleBarSubSurf &tab, const auto spec) {
         const auto child = node->child_at(i);
-        const std::string title =
-            static_cast<IDisplay *>(child.get())->to_string();
+        const std::string title = child->get_title();
 
         tab.cache_textures({
             spec,
@@ -237,7 +236,9 @@ wf::region_t SplitDecoration::calculate_region() const {
     return region;
 }
 
-void SplitDecoration::on_child_inserted_impl() {
+void SplitDecoration::on_child_inserted_impl(NodeSignalData *data) {
+    data->node->connect_signal("title-changed", &on_title_changed);
+
     tab_surfaces.emplace_back();
 
     if (node->get_split_type() == SplitType::STACKED)
@@ -246,7 +247,9 @@ void SplitDecoration::on_child_inserted_impl() {
         cache_textures();
 }
 
-void SplitDecoration::on_child_removed_impl() {
+void SplitDecoration::on_child_removed_impl(NodeSignalData *data) {
+    data->node->disconnect_signal(&on_title_changed);
+
     if (node_state.is_child_active) {
         on_set_child_active(false);
 
