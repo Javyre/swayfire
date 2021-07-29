@@ -193,6 +193,9 @@ class INodeParent : public virtual IDisplay {
 
     /// Get this parent's last active child.
     virtual Node get_active_child() const = 0;
+
+    /// Notify this parent that a direct child has changed its title.
+    virtual void notify_child_title_changed(Node child) { (void)child; }
 };
 
 using NodeParent = nonstd::observer_ptr<INodeParent>;
@@ -278,6 +281,9 @@ class INode : public virtual IDisplay, public wf::object_base_t {
     /// Close all the subsurfaces of this node.
     void close_subsurfaces();
 
+    /// Emit the "title-changed" signal and propagate it to the parent nodes.
+    void emit_title_changed();
+
     INode() : node_id(id_counter) { id_counter++; }
 
   public:
@@ -300,6 +306,9 @@ class INode : public virtual IDisplay, public wf::object_base_t {
     ///
     /// Noop if node is already initialized
     void notify_initialized();
+
+    /// Get the node's title.
+    virtual std::string get_title() = 0;
 
     /// Get the outer geometry of the node.
     wf::geometry_t get_geometry() { return geometry; }
@@ -477,6 +486,11 @@ class ViewNode final : public INode {
         on_geometry_changed_impl();
     };
 
+    /// Handle title changes.
+    wf::signal_connection_t on_title_changed = [&](wf::signal_data_t *) {
+        emit_title_changed();
+    };
+
     /// Destroys the view node and the custom data attached to the view.
     void on_unmapped_impl();
 
@@ -526,6 +540,7 @@ class ViewNode final : public INode {
     // == INode impl ==
 
     void on_initialized() override;
+    std::string get_title() override;
     void set_geometry(wf::geometry_t geo) override;
     void set_floating(bool fl) override;
     void set_sublayer(nonstd::observer_ptr<wf::sublayer_t> sublayer) override;
@@ -716,10 +731,12 @@ class SplitNode final : public INode, public INodeParent {
     void swap_children(Node a, Node b) override;
     void set_active_child(Node node) override;
     Node get_active_child() const override;
+    void notify_child_title_changed(Node child) override;
 
     // == INode impl ==
 
     void on_initialized() override;
+    std::string get_title() override;
     void set_geometry(wf::geometry_t geo) override;
     void begin_resize() override;
     void end_resize() override;

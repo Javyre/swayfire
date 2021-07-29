@@ -60,6 +60,10 @@ struct GeometryChangedSignalData : wf::signal_data_t {
     wf::geometry_t old_geo, new_geo;
 };
 
+/// NAME: title-changed
+/// ON: INode
+/// WHEN: When the node's title is updated.
+
 // ========================================================================== //
 // == View Node Signals ==
 

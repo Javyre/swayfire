@@ -75,6 +75,11 @@ void INode::close_subsurfaces() {
         subsurf->close();
 }
 
+void INode::emit_title_changed() {
+    emit_signal("title-changed", nullptr);
+    parent->notify_child_title_changed(this);
+}
+
 SplitNodeRef INode::as_split_node() { return dynamic_cast<SplitNode *>(this); }
 
 ViewNodeRef INode::as_view_node() { return dynamic_cast<ViewNode *>(this); }
@@ -252,6 +257,7 @@ ViewNode::ViewNode(wayfire_view view) : view(view) {
     view->connect_signal("mapped", &on_mapped);
     view->connect_signal("unmapped", &on_unmapped);
     view->connect_signal("geometry-changed", &on_geometry_changed);
+    view->connect_signal("title-changed", &on_title_changed);
 }
 
 ViewNode::~ViewNode() {
@@ -263,6 +269,7 @@ ViewNode::~ViewNode() {
 
     close_subsurfaces();
 
+    view->disconnect_signal(&on_title_changed);
     view->disconnect_signal(&on_geometry_changed);
     view->disconnect_signal(&on_unmapped);
     view->disconnect_signal(&on_mapped);
@@ -319,6 +326,8 @@ void ViewNode::on_initialized() {
     data.node = this;
     ws->output->emit_signal("swf-view-node-attached", &data);
 }
+
+std::string ViewNode::get_title() { return view->get_title(); }
 
 void ViewNode::set_geometry(const wf::geometry_t geo) {
     const auto old_geo = geometry;
@@ -491,6 +500,7 @@ void SplitNode::insert_child_at(SplitChildIter at, OwnedNode node) {
     NodeSignalData data;
     data.node = node_ref;
     emit_signal("child-inserted", &data);
+    emit_title_changed();
 
     refresh_geometry();
 }
@@ -568,6 +578,7 @@ OwnedNode SplitNode::remove_child_at(SplitChildIter child) {
     NodeSignalData data;
     data.node = owned_node.get();
     emit_signal("child-removed", &data);
+    emit_title_changed();
 
     refresh_geometry();
 
@@ -586,9 +597,12 @@ void SplitNode::set_active_child(Node node) {
     active_child = std::distance(children.begin(), child);
 
     parent->set_active_child(this);
+    emit_title_changed();
 }
 
 Node SplitNode::get_active_child() const { return child_at(active_child); }
+
+void SplitNode::notify_child_title_changed(Node child) { emit_title_changed(); }
 
 void SplitNode::set_split_type(SplitType st) {
     if (is_split())
@@ -596,6 +610,7 @@ void SplitNode::set_split_type(SplitType st) {
     split_type = st;
     refresh_geometry();
     emit_signal("split-type-changed", nullptr);
+    emit_title_changed();
 }
 
 Node SplitNode::try_downgrade() {
@@ -649,6 +664,7 @@ OwnedNode SplitNode::swap_child(Node node, OwnedNode other) {
     data.old_node = other.get();
     data.new_node = child->node.get();
     emit_signal("child-swapped", &data);
+    emit_title_changed();
 
     return other;
 }
@@ -665,6 +681,7 @@ void SplitNode::swap_children(Node a, Node b) {
     std::iter_swap(child_a, child_b);
 
     emit_signal("children-swapped", nullptr);
+    emit_title_changed();
 
     refresh_geometry();
 }
@@ -905,6 +922,33 @@ void SplitNode::on_initialized() {
     SplitNodeSignalData data = {};
     data.node = this;
     ws->output->emit_signal("swf-split-node-attached", &data);
+}
+
+std::string SplitNode::get_title() {
+    std::ostringstream r;
+    switch (get_split_type()) {
+    case SplitType::VSPLIT:
+        r << 'V';
+        break;
+    case SplitType::HSPLIT:
+        r << 'H';
+        break;
+    case SplitType::TABBED:
+        r << 'T';
+        break;
+    case SplitType::STACKED:
+        r << 'S';
+        break;
+    }
+
+    r << '[';
+    if (empty())
+        r << "EMPTY";
+    else
+        r << get_active_child()->get_title();
+    r << ']';
+
+    return r.str();
 }
 
 void SplitNode::set_geometry(const wf::geometry_t geo) {
