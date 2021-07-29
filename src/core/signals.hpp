@@ -82,6 +82,11 @@ struct GeometryChangedSignalData : wf::signal_data_t {
 /// ON: SplitNode
 /// WHEN: When a child of the node is swapped for another node.
 
+struct ChildSwappedSignalData : wf::signal_data_t {
+    Node old_node; ///< The swapped-out node.
+    Node new_node; ///< The swapped-in node.
+};
+
 /// NAME: children-swapped
 /// ON: SplitNode
 /// WHEN: When two of the node's children are swapped.
@@ -100,6 +105,12 @@ struct ViewNodeSignalData : wf::signal_data_t {
 struct SplitNodeSignalData : wf::signal_data_t {
     /// The node that triggered the signal
     SplitNodeRef node;
+};
+
+/// Data passed on node signals emitted from swayfire
+struct NodeSignalData : wf::signal_data_t {
+    /// The node that triggered the signal
+    Node node;
 };
 
 #endif // ifndef SWAYFIRE_SIGNALS_HPP
