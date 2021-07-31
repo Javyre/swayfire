@@ -12,7 +12,6 @@
 #include <wayfire/config/types.hpp>
 #include <wayfire/core.hpp>
 #include <wayfire/geometry.hpp>
-#include <wayfire/nonstd/noncopyable.hpp>
 #include <wayfire/nonstd/observer_ptr.h>
 #include <wayfire/object.hpp>
 #include <wayfire/option-wrapper.hpp>
