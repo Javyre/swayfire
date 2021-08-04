@@ -147,10 +147,6 @@ class ViewDecoration final : public wf::decorator_frame_t_t {
     };
 
     wf::signal_connection_t on_detached = [&](wf::signal_data_t *) {
-        surface_ref->unmap();
-        if (!is_hidden())
-            detach_surface();
-
         // Save the current node in case cleaning the data triggers a
         // destruction of the current decoration. Avoid crashing when trying to
         // access to the node.
@@ -199,6 +195,7 @@ class ViewDecoration final : public wf::decorator_frame_t_t {
     ~ViewDecoration() override {
         if (!is_hidden())
             detach_surface();
+        surface_ref->unmap();
 
         const auto output = node->get_ws()->output;
         output->disconnect_signal(&on_config_changed);
