@@ -93,7 +93,10 @@ void INode::notify_initialized() {
     on_initialized();
 }
 
-void INode::add_padding(Padding padding) { this->padding += padding; }
+void INode::add_padding(Padding padding) {
+    this->padding += padding;
+    emit_signal("padding-changed", nullptr);
+}
 
 Padding INode::get_padding() { return padding; }
 

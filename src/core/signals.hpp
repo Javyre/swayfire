@@ -77,6 +77,10 @@ struct GeometryChangedSignalData : wf::signal_data_t {
 /// ON: INode
 /// WHEN: When the node's title is updated.
 
+/// NAME: padding-changed
+/// ON: INode
+/// WHEN: When the node's padding changes.
+
 // ========================================================================== //
 // == View Node Signals ==
 
