@@ -77,6 +77,41 @@ struct Options {
     }
 };
 
+enum Corner : std::uint8_t {
+    NONE = 0,
+
+    TOP_LEFT = 1 << 0,
+    TOP_RIGHT = 1 << 1,
+    BOTTOM_LEFT = 1 << 2,
+    BOTTOM_RIGHT = 1 << 3,
+
+    TOP = TOP_LEFT | TOP_RIGHT,
+    BOTTOM = BOTTOM_LEFT | BOTTOM_RIGHT,
+    LEFT = TOP_LEFT | BOTTOM_LEFT,
+    RIGHT = TOP_RIGHT | BOTTOM_RIGHT,
+
+    ALL = TOP_LEFT | TOP_RIGHT | BOTTOM_LEFT | BOTTOM_RIGHT,
+};
+
+using Corners = std::uint8_t;
+
+/// Recursively set the subtree's out-facing corners.
+void set_outer_corners(Node tree, Corners corners);
+
+class ViewDecoration;
+struct ViewDecorationData : public wf::custom_data_t {
+    nonstd::observer_ptr<ViewDecoration> deco;
+    ViewDecorationData(nonstd::observer_ptr<ViewDecoration> deco)
+        : deco(deco) {}
+};
+
+class SplitDecoration;
+struct SplitDecorationData : public wf::custom_data_t {
+    nonstd::observer_ptr<SplitDecoration> deco;
+    SplitDecorationData(nonstd::observer_ptr<SplitDecoration> deco)
+        : deco(deco) {}
+};
+
 class DecorationSurface final : public wf::compositor_surface_t,
                                 public wf::surface_interface_t {
   private:
@@ -98,20 +133,29 @@ class DecorationSurface final : public wf::compositor_surface_t,
 
     wf::region_t cached_region; ///< Cached minimal region containing this deco.
 
+    /// Whether the corners are outer corners of the tiling tree.
+    Corners outer_corners = Corner::NONE;
+
   public:
     DecorationSurface(ViewNodeRef node, nonstd::observer_ptr<Options> options)
         : node(node), options(options) {}
 
-    // Set the size of the surface.
+    /// Set the outer corners of the splitnode.
+    [[nodiscard]] Corners get_outer_corners() const { return outer_corners; };
+
+    /// Set the outer corners of the splitnode.
+    void set_outer_corners(Corners corners) { outer_corners = corners; };
+
+    /// Set the size of the surface.
     void set_size(wf::dimensions_t view_size);
 
-    // Set the surface color as active or inactive.
+    /// Set the surface color as active or inactive.
     void set_active(bool active);
 
-    // Recalculate the region and cache it.
+    /// Recalculate the region and cache it.
     void recalculate_region();
 
-    // Unmap the surface.
+    /// Unmap the surface.
     void unmap();
 
     // == Impl wf::surface_interface_t ==
@@ -124,17 +168,22 @@ class DecorationSurface final : public wf::compositor_surface_t,
 };
 
 class ViewDecoration final : public wf::decorator_frame_t_t {
-  private:
+  public:
     const ViewNodeRef node; ///< The node we're decorating.
 
     /// Surface representing the decoration.
     nonstd::observer_ptr<DecorationSurface> surface_ref;
 
+  private:
     /// Surface swap, used when hiding the surface from the node.
     std::unique_ptr<wf::surface_interface_t> surface;
 
     /// The loaded options from the cfg.
     nonstd::observer_ptr<Options> options;
+
+    wf::signal_connection_t on_padding_changed = [&](wf::signal_data_t *) {
+        ::set_outer_corners(node, surface_ref->get_outer_corners());
+    };
 
     wf::signal_connection_t on_prefered_split_type_changed =
         [&](wf::signal_data_t *) { damage(); };
@@ -175,6 +224,7 @@ class ViewDecoration final : public wf::decorator_frame_t_t {
     ViewDecoration(ViewNodeRef node, nonstd::observer_ptr<Options> options)
         : node(node), options(options) {
 
+        node->connect_signal("padding-changed", &on_padding_changed);
         node->connect_signal("prefered-split-type-changed",
                              &on_prefered_split_type_changed);
         node->connect_signal("detached", &on_detached);
@@ -190,9 +240,13 @@ class ViewDecoration final : public wf::decorator_frame_t_t {
         surface = std::move(surface_unique_ptr);
         if (!node->view->fullscreen)
             attach_surface();
+
+        node->store_data(std::make_unique<ViewDecorationData>(this));
     }
 
     ~ViewDecoration() override {
+        node->erase_data<ViewDecorationData>();
+
         if (!is_hidden())
             detach_surface();
         surface_ref->unmap();
@@ -204,6 +258,7 @@ class ViewDecoration final : public wf::decorator_frame_t_t {
         node->view->disconnect_signal(&on_fullscreen);
         node->disconnect_signal(&on_detached);
         node->disconnect_signal(&on_prefered_split_type_changed);
+        node->disconnect_signal(&on_padding_changed);
     }
 
     /// Is the decoration currently hidden.
@@ -220,13 +275,6 @@ class ViewDecoration final : public wf::decorator_frame_t_t {
     /* TODO: impl these handlers
     void notify_view_tiled() override;
     */
-};
-
-class SplitDecoration;
-struct SplitDecorationData : public wf::custom_data_t {
-    nonstd::observer_ptr<SplitDecoration> deco;
-    SplitDecorationData(nonstd::observer_ptr<SplitDecoration> deco)
-        : deco(deco) {}
 };
 
 class SplitDecoration final : public wf::view_interface_t,
@@ -265,6 +313,9 @@ class SplitDecoration final : public wf::view_interface_t,
     /// The tab subsurfaces abstracting the rendering and caching of their
     /// content.
     std::vector<TitleBarSubSurf> tab_surfaces;
+
+    /// Whether the corners are outer corners of the tiling tree.
+    Corners outer_corners = Corner::NONE;
 
     Padding current_padding{0, 0, 0, 0}; ///< Current padding added to the node.
 
@@ -331,6 +382,12 @@ class SplitDecoration final : public wf::view_interface_t,
             damage();
         };
 
+    bool enable_on_padding_changed = true;
+    wf::signal_connection_t on_padding_changed = [&](wf::signal_data_t *) {
+        if (enable_on_padding_changed)
+            ::set_outer_corners(node, outer_corners);
+    };
+
     wf::signal_connection_t on_title_changed = [&](wf::signal_data_t *) {
         cache_textures();
     };
@@ -347,9 +404,19 @@ class SplitDecoration final : public wf::view_interface_t,
         data->new_node->connect_signal("title-changed", &on_title_changed);
 
         cache_textures();
+
+        {
+            ::set_outer_corners(data->old_node, Corner::NONE);
+            const auto count = node->get_children_count();
+            if (count > 0 && (node->child_at(0) == data->new_node ||
+                              node->child_at(count - 1) == data->new_node))
+                ::set_outer_corners(node, outer_corners);
+        }
     };
     wf::signal_connection_t on_children_swapped = [&](wf::signal_data_t *) {
         cache_textures();
+
+        ::set_outer_corners(node, outer_corners);
     };
 
     void on_child_removed_impl(NodeSignalData *data);
@@ -364,6 +431,8 @@ class SplitDecoration final : public wf::view_interface_t,
             set_visible(true);
 
         refresh_size();
+
+        ::set_outer_corners(node, outer_corners);
     };
 
     wf::signal_connection_t on_detached = [&](wf::signal_data_t *) {
@@ -378,6 +447,7 @@ class SplitDecoration final : public wf::view_interface_t,
             tab_surfaces.emplace_back();
 
         node->connect_signal("geometry-changed", &on_geometry_changed);
+        node->connect_signal("padding-changed", &on_padding_changed);
         node->connect_signal("child-inserted", &on_child_inserted);
         node->connect_signal("child-swapped", &on_child_swapped);
         node->connect_signal("children-swapped", &on_children_swapped);
@@ -409,8 +479,16 @@ class SplitDecoration final : public wf::view_interface_t,
         node->disconnect_signal(&on_children_swapped);
         node->disconnect_signal(&on_child_swapped);
         node->disconnect_signal(&on_child_inserted);
+        node->disconnect_signal(&on_padding_changed);
         node->disconnect_signal(&on_geometry_changed);
     }
+
+    [[nodiscard]] Padding get_current_padding() const {
+        return current_padding;
+    }
+
+    /// Set the outer corners of the splitnode.
+    void set_outer_corners(Corners corners) { outer_corners = corners; };
 
     /// Handle this node being (un)set as active in its workspace.
     void on_set_active(bool active);
@@ -483,6 +561,13 @@ class SwayfireDeco final : public SwayfirePlugin {
 
             if (data->new_node)
                 notify_tree(data->new_node, true);
+        };
+
+    void on_root_node_changed_impl(RootNodeChangedSignalData *data);
+    wf::signal_connection_t on_root_node_changed =
+        [&](wf::signal_data_t *data_) {
+            const auto data = dynamic_cast<RootNodeChangedSignalData *>(data_);
+            on_root_node_changed_impl(data);
         };
 
     Options options{};

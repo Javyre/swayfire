@@ -100,6 +100,10 @@ bool contains_point(wf::geometry_t geo, wf::point_t pt) {
 namespace CurveSubSurf {
 void render(Spec spec, wf::color_t color, wf::point_t origin,
             glm::mat4 matrix) {
+    if (spec.radius == 0 || spec.stroke_width == 0 ||
+        spec.theta_a == spec.theta_b)
+        return;
+
     origin = origin + spec.origin;
 
     curve_program.use(wf::TEXTURE_TYPE_RGBA);
@@ -408,63 +412,69 @@ inline SubSpecs get_subspecs(Spec spec) {
         // Left side
         wf::geometry_t{
             0,
-            spec.border_radius,
+            spec.corner_radii.top_left,
             spec.border_width,
-            spec.geo.height - (2 * spec.border_radius),
+            spec.geo.height -
+                (spec.corner_radii.top_left + spec.corner_radii.bottom_left),
         },
         // Right side
         wf::geometry_t{
             spec.geo.width - spec.border_width,
-            spec.border_radius,
+            spec.corner_radii.top_right,
             spec.border_width,
-            spec.geo.height - (2 * spec.border_radius),
+            spec.geo.height -
+                (spec.corner_radii.top_right + spec.corner_radii.bottom_right),
         },
         // Top side
         wf::geometry_t{
-            spec.border_radius,
+            spec.corner_radii.top_left,
             0,
-            spec.geo.width - (2 * spec.border_radius),
+            spec.geo.width -
+                (spec.corner_radii.top_left + spec.corner_radii.top_right),
             spec.border_width,
         },
         // Bottom side
         wf::geometry_t{
-            spec.border_radius,
+            spec.corner_radii.bottom_left,
             spec.geo.height - spec.border_width,
-            spec.geo.width - (2 * spec.border_radius),
+            spec.geo.width - (spec.corner_radii.bottom_left +
+                              spec.corner_radii.bottom_right),
             spec.border_width,
         },
 
         // Top-left corner
         CurveSubSurf::Spec{
-            {spec.border_radius, spec.border_radius},
+            {spec.corner_radii.top_left, spec.corner_radii.top_left},
             M_PI_2,
             M_PI,
-            spec.border_radius,
+            spec.corner_radii.top_left,
             spec.border_width,
         },
         // Top-right corner
         CurveSubSurf::Spec{
-            {spec.geo.width - spec.border_radius, spec.border_radius},
+            {spec.geo.width - spec.corner_radii.top_right,
+             spec.corner_radii.top_right},
             0,
             M_PI_2,
-            spec.border_radius,
+            spec.corner_radii.top_right,
             spec.border_width,
         },
         // Bottom-left corner
         CurveSubSurf::Spec{
-            {spec.border_radius, spec.geo.height - spec.border_radius},
+            {spec.corner_radii.bottom_left,
+             spec.geo.height - spec.corner_radii.bottom_left},
             M_PI,
             M_PI + M_PI_2,
-            spec.border_radius,
+            spec.corner_radii.bottom_left,
             spec.border_width,
         },
         // Bottom-right corner
         CurveSubSurf::Spec{
-            {spec.geo.width - spec.border_radius,
-             spec.geo.height - spec.border_radius},
+            {spec.geo.width - spec.corner_radii.bottom_right,
+             spec.geo.height - spec.corner_radii.bottom_right},
             M_PI + M_PI_2,
             2 * M_PI,
-            spec.border_radius,
+            spec.corner_radii.bottom_right,
             spec.border_width,
         },
     };

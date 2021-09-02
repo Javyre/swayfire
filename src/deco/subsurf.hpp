@@ -79,8 +79,11 @@ struct TextSubSurf {
 namespace BorderSubSurf {
 struct Spec {
     wf::geometry_t geo; ///< Bounding box of the frame.
-    int border_radius;  ///< Outer radius of the corners.
-    int border_width;   ///< Width of the border.
+    struct {
+        int top_left, top_right;
+        int bottom_left, bottom_right;
+    } corner_radii;   ///< Outer radius of the corners.
+    int border_width; ///< Width of the border.
 };
 
 struct Colors {

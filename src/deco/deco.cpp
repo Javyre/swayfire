@@ -60,9 +60,16 @@ void ViewDecoration::detach_surface() {
 // DecorationSurface
 
 BorderSubSurf::Spec DecorationSurface::get_border_spec() const {
+    const int border_radius = options->border_radius;
+
     return {
         {0, 0, size.width, size.height},
-        options->border_radius,
+        {
+            (outer_corners & Corner::TOP_LEFT) ? border_radius : 0,
+            (outer_corners & Corner::TOP_RIGHT) ? border_radius : 0,
+            (outer_corners & Corner::BOTTOM_LEFT) ? border_radius : 0,
+            (outer_corners & Corner::BOTTOM_RIGHT) ? border_radius : 0,
+        },
         options->border_width,
     };
 }
@@ -134,6 +141,7 @@ void DecorationSurface::simple_render(const wf::framebuffer_t &fb, int x, int y,
 
 #define WITH_TABS_SPEC_IMPL                                                    \
     const auto count = tab_surfaces.size();                                    \
+    const int border_radius = options->border_radius;                          \
     int offset = 0;                                                            \
                                                                                \
     if (node->get_split_type() == SplitType::TABBED) {                         \
@@ -148,8 +156,12 @@ void DecorationSurface::simple_render(const wf::framebuffer_t &fb, int x, int y,
                     geometry.height,                                           \
                 },                                                             \
                 {                                                              \
-                    i == 0 ? options->border_radius : 0,                       \
-                    i == count - 1 ? options->border_radius : 0,               \
+                    (i == 0 && outer_corners & Corner::TOP_LEFT)               \
+                        ? border_radius                                        \
+                        : 0,                                                   \
+                    (i == count - 1 && outer_corners & Corner::TOP_RIGHT)      \
+                        ? border_radius                                        \
+                        : 0,                                                   \
                 }};                                                            \
                                                                                \
             f(tab_surfaces[i], spec);                                          \
@@ -165,8 +177,12 @@ void DecorationSurface::simple_render(const wf::framebuffer_t &fb, int x, int y,
                     20,                                                        \
                 },                                                             \
                 {                                                              \
-                    i == 0 ? options->border_radius : 0,                       \
-                    i == 0 ? options->border_radius : 0,                       \
+                    (i == 0 && outer_corners & Corner::TOP_LEFT)               \
+                        ? border_radius                                        \
+                        : 0,                                                   \
+                    (i == 0 && outer_corners & Corner::TOP_RIGHT)              \
+                        ? border_radius                                        \
+                        : 0,                                                   \
                 }};                                                            \
                                                                                \
             f(tab_surfaces[i], spec);                                          \
@@ -220,7 +236,11 @@ void SplitDecoration::set_size(wf::dimensions_t dims) {
     delta_padding -= current_padding;
 
     if (delta_padding) {
+        // We don't want to react to our own event.
+        enable_on_padding_changed = false;
         node->add_padding(delta_padding);
+        enable_on_padding_changed = true;
+
         current_padding += delta_padding;
         node->refresh_geometry();
     }
@@ -245,6 +265,13 @@ void SplitDecoration::on_child_inserted_impl(NodeSignalData *data) {
         refresh_size();
     else
         cache_textures();
+
+    {
+        const auto count = node->get_children_count();
+        if (count > 0 && (node->child_at(0) == data->node ||
+                          node->child_at(count - 1) == data->node))
+            ::set_outer_corners(node, outer_corners);
+    }
 }
 
 void SplitDecoration::on_child_removed_impl(NodeSignalData *data) {
@@ -271,6 +298,8 @@ void SplitDecoration::on_child_removed_impl(NodeSignalData *data) {
         refresh_size();
     else
         cache_textures();
+
+    ::set_outer_corners(node, outer_corners);
 }
 
 void SplitDecoration::refresh_size() {
@@ -389,6 +418,7 @@ void SwayfireDeco::decorate_node(Node node) {
     if (auto vnode = node->as_view_node()) {
         auto deco = std::make_unique<ViewDecoration>(vnode, &options);
         vnode->view->set_decoration(std::move(deco));
+
     } else if (auto snode = node->as_split_node()) {
         auto surf = std::make_unique<SplitDecoration>(snode, &options);
         const auto surf_ref = surf.get();
@@ -397,6 +427,101 @@ void SwayfireDeco::decorate_node(Node node) {
         wf::get_core().add_view(std::move(surf)); // Initialize view
 
         snode->add_subsurface(surf_ref);
+    }
+
+    if (node->parent == node->get_ws())
+        set_outer_corners(node,
+                          node->get_floating() ? Corner::ALL : Corner::NONE);
+}
+
+void set_outer_corners(Node node, Corners corners) {
+    constexpr auto remove_padded_edges = [](Corners corners,
+                                            const Padding padding) {
+        if (padding.top)
+            corners &= ~Corner::TOP;
+        if (padding.bottom)
+            corners &= ~Corner::BOTTOM;
+        if (padding.left)
+            corners &= ~Corner::LEFT;
+        if (padding.right)
+            corners &= ~Corner::RIGHT;
+        return corners;
+    };
+
+    if (const auto view_node = node->as_view_node()) {
+        const auto deco = view_node->get_data<ViewDecorationData>()->deco;
+
+        corners = remove_padded_edges(corners, node->get_padding());
+
+        deco->surface_ref->set_outer_corners(corners);
+        deco->damage();
+
+    } else if (const auto split_node = node->as_split_node()) {
+        const auto deco = split_node->get_data<SplitDecorationData>()->deco;
+
+        Padding padding = node->get_padding();
+        // Padding besides the padding added by the split deco.
+        padding -= deco->get_current_padding();
+        corners = remove_padded_edges(corners, padding);
+
+        deco->set_outer_corners(corners);
+        deco->damage();
+
+        if (split_node->is_stack())
+            corners &= ~Corner::TOP;
+
+        // == Apply `corners` to children. ==
+
+        const auto count = split_node->get_children_count();
+
+        if (count == 1) {
+            set_outer_corners(split_node->child_at(0), corners);
+        } else if (count > 0) {
+            switch (split_node->get_split_type()) {
+            case SplitType::VSPLIT: {
+                set_outer_corners(split_node->child_at(0),
+                                  corners & Corner::LEFT);
+                set_outer_corners(split_node->child_at(count - 1),
+                                  corners & Corner::RIGHT);
+
+                for (std::size_t i = 1; i < count - 1; i++)
+                    set_outer_corners(split_node->child_at(i), Corner::NONE);
+                break;
+            }
+
+            case SplitType::HSPLIT: {
+                set_outer_corners(split_node->child_at(0),
+                                  corners & Corner::TOP);
+                set_outer_corners(split_node->child_at(count - 1),
+                                  corners & Corner::BOTTOM);
+
+                for (std::size_t i = 1; i < count - 1; i++)
+                    set_outer_corners(split_node->child_at(i), Corner::NONE);
+                break;
+            }
+
+            case SplitType::STACKED:
+            case SplitType::TABBED: {
+                for (std::size_t i = 0; i < count; i++)
+                    set_outer_corners(split_node->child_at(i), corners);
+                break;
+            }
+            }
+        }
+    }
+}
+
+void SwayfireDeco::on_root_node_changed_impl(RootNodeChangedSignalData *data) {
+
+    // Only reason it wouldn't already be Corner::NONE is if the old_root was
+    // floating.
+    if (data->floating && data->old_root) {
+        set_outer_corners(data->old_root, Corner::NONE);
+    }
+
+    if (data->new_root) {
+        set_outer_corners(data->new_root,
+                          data->floating ? Corner::ALL : Corner::NONE);
     }
 }
 
@@ -417,6 +542,7 @@ void SwayfireDeco::swf_init() {
     output->connect_signal("swf-view-node-attached", &on_view_node_attached);
     output->connect_signal("swf-split-node-attached", &on_split_node_created);
     output->connect_signal("swf-active-node-changed", &on_active_node_changed);
+    output->connect_signal("swf-root-node-changed", &on_root_node_changed);
 
     options.set_callback(
         [&] { output->emit_signal("swf-deco-config-changed", nullptr); });
@@ -425,6 +551,7 @@ void SwayfireDeco::swf_init() {
 void SwayfireDeco::swf_fini() {
     LOGD("=== deco fini ===");
     output->emit_signal("swf-deco-fini", nullptr);
+    output->disconnect_signal(&on_root_node_changed);
     output->disconnect_signal(&on_active_node_changed);
     output->disconnect_signal(&on_split_node_created);
     output->disconnect_signal(&on_view_node_attached);
