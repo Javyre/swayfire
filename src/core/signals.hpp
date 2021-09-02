@@ -8,10 +8,12 @@
 class INode;
 class SplitNode;
 class ViewNode;
+class Workspace;
 
 using Node = nonstd::observer_ptr<INode>;
 using SplitNodeRef = nonstd::observer_ptr<SplitNode>;
 using ViewNodeRef = nonstd::observer_ptr<ViewNode>;
+using WorkspaceRef = nonstd::observer_ptr<Workspace>;
 
 // ========================================================================== //
 // == Swayfire Lifecycle ==
@@ -32,6 +34,17 @@ using ViewNodeRef = nonstd::observer_ptr<ViewNode>;
 /// WHEN: When a workspace on the output's active node changes.
 struct ActiveNodeChangedSignalData : wf::signal_data_t {
     Node old_node, new_node;
+};
+
+/// NAME: swf-root-node-changed
+/// ON: output
+/// WHEN: When one of a workspace on the output's root nodes changes.
+struct RootNodeChangedSignalData : wf::signal_data_t {
+    WorkspaceRef workspace;
+    bool floating;
+
+    // Both of these are non-null in the event of a swap action.
+    Node old_root, new_root;
 };
 
 // ========================================================================== //

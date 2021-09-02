@@ -1075,7 +1075,15 @@ void Workspace::insert_floating_node(OwnedNode node) {
     node->set_sublayer(floating_sublayer);
     node->notify_initialized();
 
+    const Node node_ref = node;
     floating_nodes.push_back({std::move(node), floating_sublayer});
+
+    RootNodeChangedSignalData data;
+    data.workspace = this;
+    data.floating = true;
+    data.old_root = nullptr;
+    data.new_root = node_ref;
+    output->emit_signal("swf-root-node-changed", &data);
 }
 
 Workspace::FloatingNodeIter Workspace::find_floating(Node node) {
@@ -1123,6 +1131,14 @@ OwnedNode Workspace::swap_floating_node(Node node, OwnedNode other) {
     std::swap(child->node, other);
 
     child->node->notify_initialized();
+
+    RootNodeChangedSignalData data;
+    data.workspace = this;
+    data.floating = true;
+    data.old_root = other;
+    data.new_root = child->node;
+    output->emit_signal("swf-root-node-changed", &data);
+
     return other;
 }
 
@@ -1143,6 +1159,13 @@ Workspace::swap_tiled_root(std::unique_ptr<SplitNode> other) {
     tiled_root.node->set_ws(this);
     tiled_root.node->set_sublayer(tiled_root.sublayer);
     tiled_root.node->notify_initialized();
+
+    RootNodeChangedSignalData data;
+    data.workspace = this;
+    data.floating = false;
+    data.old_root = ret;
+    data.new_root = tiled_root.node;
+    output->emit_signal("swf-root-node-changed", &data);
 
     return ret;
 }
