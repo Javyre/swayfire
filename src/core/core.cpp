@@ -95,6 +95,8 @@ void INode::notify_initialized() {
 
 void INode::add_padding(Padding padding) { this->padding += padding; }
 
+Padding INode::get_padding() { return padding; }
+
 void INode::add_subsurface(wayfire_view subsurf) {
     const auto ws = get_ws();
     const auto sublayer = ws->get_child_sublayer(find_root_parent());
@@ -251,7 +253,7 @@ ViewNode::ViewNode(wayfire_view view) : view(view) {
     geo_enforcer = ge.get();
     view->add_transformer(std::move(ge));
 
-    geometry = view->get_wm_geometry() + padding;
+    geometry = expand_geometry(view->get_wm_geometry());
     floating_geometry = geometry;
 
     view->connect_signal("mapped", &on_mapped);
@@ -295,7 +297,7 @@ void ViewNode::on_geometry_changed_impl() {
             auto ngeo = nonwf::local_to_relative_geometry(
                 view->get_wm_geometry(), curr_wsid, get_ws()->wsid,
                 get_ws()->output);
-            set_geometry(ngeo + padding);
+            set_geometry(expand_geometry(ngeo));
         } else {
             const auto new_ws =
                 get_ws()->plugin->get_view_workspace(view, false);

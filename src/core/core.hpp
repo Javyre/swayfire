@@ -259,8 +259,15 @@ class INode : public virtual IDisplay, public wf::object_base_t {
     WorkspaceRef ws = nullptr; ///< The workspace by which this node is managed.
     wf::geometry_t geometry;   ///< The outer geometry of this node.
 
-    /// The cached padding space around the node's inner_geometry.
+    /// The accumulated padding space around the node's inner_geometry.
+    ///
+    /// Padding is by convention expected to be space allocated for subsurfaces
+    /// of the node that will stick to its sides.
     Padding padding{};
+
+    /// Expand the given geometry treating it as the inner geometry of this node
+    /// to get the outer geometry.
+    wf::geometry_t expand_geometry(wf::geometry_t geo) { return geo + padding; }
 
     uint node_id; ///< The id of this node.
 
@@ -342,6 +349,9 @@ class INode : public virtual IDisplay, public wf::object_base_t {
     /// Add negative padding to remove from the current padding.
     /// This function does not refresh_geometry() for you.
     void add_padding(Padding padding);
+
+    /// Get this node's padding.
+    Padding get_padding();
 
     /// Add a new subsurface to this node.
     void add_subsurface(wayfire_view subsurf);
@@ -471,7 +481,7 @@ class ViewNode final : public INode {
     /// Handle the view being mapped.
     wf::signal_connection_t on_mapped = [&](wf::signal_data_t *) {
         if (view->tiled_edges != wf::TILED_EDGES_ALL)
-            floating_geometry = view->get_wm_geometry() + padding;
+            floating_geometry = expand_geometry(view->get_wm_geometry());
     };
 
     /// Handle unmapped views.
@@ -665,13 +675,17 @@ class SplitNode final : public INode, public INodeParent {
     ~SplitNode() override;
 
     /// Return whether this split contains no children.
-    bool empty() { return children.empty(); }
+    [[nodiscard]] bool empty() const { return children.empty(); }
 
     /// Return the amount of children nodes under this split node.
-    std::size_t get_children_count() { return children.size(); }
+    [[nodiscard]] std::size_t get_children_count() const {
+        return children.size();
+    }
 
     /// Get a child of this split by index.
-    Node child_at(std::size_t i) const { return children.at(i).node.get(); }
+    [[nodiscard]] Node child_at(std::size_t i) const noexcept {
+        return children.at(i).node.get();
+    }
 
     /// Return whether this is a v/h-split.
     bool is_split() {
