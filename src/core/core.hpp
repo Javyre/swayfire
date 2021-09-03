@@ -1078,9 +1078,13 @@ class Swayfire final : public wf::plugin_interface_t {
                     to_ws->insert_floating_node(
                         from_ws->remove_floating_node(floating));
 
-                    floating->set_geometry(nonwf::local_to_relative_geometry(
-                        floating->get_geometry(), from_ws->wsid, to_ws->wsid,
-                        output));
+                    // Sticky views don't get moved on workspace change, so
+                    // their local coords are already right.
+                    if (!node->view->sticky)
+                        floating->set_geometry(
+                            nonwf::local_to_relative_geometry(
+                                floating->get_geometry(), from_ws->wsid,
+                                to_ws->wsid, output));
                 }
             }
 
