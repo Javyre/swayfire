@@ -225,21 +225,30 @@ struct Padding {
 
     Padding operator-() const { return {-left, -right, -top, -bottom}; }
 
+    friend Padding operator+(Padding a, const Padding &b) {
+        a += b;
+        return a;
+    }
+
+    friend Padding operator-(Padding a, const Padding &b) {
+        a -= b;
+        return a;
+    }
+
     /// Return false if the padding is empty.
     operator bool() { return left || right || top || bottom; }
 
     /// Add the padding area to the geometry.
-    friend wf::geometry_t operator+(const wf::geometry_t &a, const Padding &b) {
-        wf::geometry_t res = a;
-        res.x -= b.left;
-        res.y -= b.top;
-        res.width += b.left + b.right;
-        res.height += b.top + b.bottom;
-        return res;
+    friend wf::geometry_t operator+(wf::geometry_t a, const Padding &b) {
+        a.x -= b.left;
+        a.y -= b.top;
+        a.width += b.left + b.right;
+        a.height += b.top + b.bottom;
+        return a;
     }
 
     /// Subtract the padding area from the geometry.
-    friend wf::geometry_t operator-(const wf::geometry_t &a, const Padding &b) {
+    friend wf::geometry_t operator-(wf::geometry_t a, const Padding &b) {
         return a + (-b);
     }
 };

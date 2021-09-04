@@ -435,23 +435,23 @@ void SwayfireDeco::decorate_node(Node node) {
 }
 
 void set_outer_corners(Node node, Corners corners) {
-    constexpr auto remove_padded_edges = [](Corners corners,
-                                            const Padding padding) {
+    constexpr auto get_padded_corners = [](const Padding padding) {
+        Corners r = Corner::NONE;
         if (padding.top)
-            corners &= ~Corner::TOP;
+            r |= Corner::TOP;
         if (padding.bottom)
-            corners &= ~Corner::BOTTOM;
+            r |= Corner::BOTTOM;
         if (padding.left)
-            corners &= ~Corner::LEFT;
+            r |= Corner::LEFT;
         if (padding.right)
-            corners &= ~Corner::RIGHT;
-        return corners;
+            r |= Corner::RIGHT;
+        return r;
     };
 
     if (const auto view_node = node->as_view_node()) {
         const auto deco = view_node->get_data<ViewDecorationData>()->deco;
 
-        corners = remove_padded_edges(corners, node->get_padding());
+        corners &= ~get_padded_corners(node->get_padding());
 
         deco->surface_ref->set_outer_corners(corners);
         deco->damage();
@@ -459,16 +459,16 @@ void set_outer_corners(Node node, Corners corners) {
     } else if (const auto split_node = node->as_split_node()) {
         const auto deco = split_node->get_data<SplitDecorationData>()->deco;
 
-        Padding padding = node->get_padding();
+        const Padding padding = node->get_padding();
         // Padding besides the padding added by the split deco.
-        padding -= deco->get_current_padding();
-        corners = remove_padded_edges(corners, padding);
+        const Corners deco_corners =
+            corners &
+            ~get_padded_corners(padding - deco->get_current_padding());
 
-        deco->set_outer_corners(corners);
+        deco->set_outer_corners(deco_corners);
         deco->damage();
 
-        if (split_node->is_stack())
-            corners &= ~Corner::TOP;
+        corners &= ~get_padded_corners(padding);
 
         // == Apply `corners` to children. ==
 
