@@ -1014,6 +1014,9 @@ class Swayfire final : public wf::plugin_interface_t {
     /// Destroy gesture grab interfaces and activators.
     void fini_grab_interface();
 
+    /// If necessary, move the view-node to the correct workspace.
+    void correct_view_workspace(ViewNodeRef node, wf::point_t correct_ws);
+
     friend class IActiveGrab;
     friend class IActiveButtonDrag;
     friend class ActiveMove;
@@ -1078,24 +1081,8 @@ class Swayfire final : public wf::plugin_interface_t {
             if (!node->parent)
                 return;
 
-            if (node->get_ws()->wsid !=
-                output->workspace->get_current_workspace()) {
-                if (auto floating = node->find_floating_parent()) {
-                    auto from_ws = node->get_ws();
-                    auto to_ws = get_current_workspace();
-
-                    to_ws->insert_floating_node(
-                        from_ws->remove_floating_node(floating));
-
-                    // Sticky views don't get moved on workspace change, so
-                    // their local coords are already right.
-                    if (!node->view->sticky)
-                        floating->set_geometry(
-                            nonwf::local_to_relative_geometry(
-                                floating->get_geometry(), from_ws->wsid,
-                                to_ws->wsid, output));
-                }
-            }
+            correct_view_workspace(node,
+                                   output->workspace->get_current_workspace());
 
             node->set_active();
         }
@@ -1174,6 +1161,22 @@ class Swayfire final : public wf::plugin_interface_t {
             on_view_attached.emit(data);
         }
     };
+
+    /// Handle active workspace changing.
+    wf::signal_connection_t on_workspace_changed =
+        [&](wf::signal_data_t *data_) {
+            const auto data =
+                dynamic_cast<wf::workspace_changed_signal *>(data_);
+            const auto views = output->workspace->get_views_on_workspace(
+                data->new_viewport, wf::LAYER_WORKSPACE);
+
+            for (const auto &view : views) {
+                if (const auto view_node = get_view_node(view)) {
+                    correct_view_workspace(
+                        view_node, output->workspace->get_current_workspace());
+                }
+            }
+        };
 
   public:
     WorkspaceRef get_current_workspace();
