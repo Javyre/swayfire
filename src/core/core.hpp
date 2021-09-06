@@ -1,9 +1,8 @@
 #ifndef SWAYFIRE_CORE_HPP
 #define SWAYFIRE_CORE_HPP
 
-#include <bits/stdint-intn.h>
-#include <bits/stdint-uintn.h>
 #include <cassert>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <sys/types.h>
