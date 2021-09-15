@@ -21,10 +21,10 @@ class IActiveGrab {
     IActiveGrab &operator=(IActiveGrab &&) = default;
 
     /// Handle the pointer motion event.
-    virtual void pointer_motion(uint32_t, uint32_t) {}
+    virtual void pointer_motion(std::uint32_t, std::uint32_t) {}
 
     /// Handle the button event.
-    virtual void button(uint32_t, uint32_t) {}
+    virtual void button(std::uint32_t, std::uint32_t) {}
 
     /// Destroy the active grab and disable the grab interface.
     virtual ~IActiveGrab();
@@ -34,10 +34,10 @@ class IActiveGrab {
 class IActiveButtonDrag : public IActiveGrab {
   private:
     /// The button that must be unpressed to deactivate the gesture.
-    uint32_t deactivate_button;
+    std::uint32_t deactivate_button;
 
   public:
-    void button(uint32_t, uint32_t) override;
+    void button(std::uint32_t, std::uint32_t) override;
 
     IActiveButtonDrag(nonstd::observer_ptr<Swayfire> plugin,
                       wf::buttonbinding_t deactivate_butt)
@@ -63,7 +63,7 @@ class ActiveMove final : public IActiveButtonDrag {
                wf::buttonbinding_t deactivate_butt)
         : IActiveButtonDrag(plugin, deactivate_butt) {}
 
-    void pointer_motion(uint32_t x, uint32_t y) override;
+    void pointer_motion(std::uint32_t x, std::uint32_t y) override;
 
     /// Try to activate the grab_interface and begin an move gesture.
     static std::unique_ptr<IActiveGrab>
@@ -87,7 +87,7 @@ class ActiveResize final : public IActiveButtonDrag {
     wf::point_t pointer_start;
 
     /// The moving edges of the resizing node.
-    uint8_t resizing_edges;
+    std::uint8_t resizing_edges;
 
   public:
     ActiveResize(nonstd::observer_ptr<Swayfire> plugin,
@@ -96,7 +96,7 @@ class ActiveResize final : public IActiveButtonDrag {
 
     ~ActiveResize() override;
 
-    void pointer_motion(uint32_t x, uint32_t y) override;
+    void pointer_motion(std::uint32_t x, std::uint32_t y) override;
 
     /// Try to activate the grab_interface and begin an resize gesture.
     static std::unique_ptr<IActiveGrab>

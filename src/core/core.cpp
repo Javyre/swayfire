@@ -444,7 +444,7 @@ void SplitNode::sync_ratios_to_sizes() {
     assert("Cannot sync ratios to sizes when children are stacked." &&
            is_split());
 
-    uint32_t total_size = 0;
+    std::uint32_t total_size = 0;
     for (const auto &c : children)
         total_size += c.size;
 
@@ -472,7 +472,7 @@ void SplitNode::sync_sizes_to_ratios() {
 
     auto size_left = total_size;
     for (auto &c : children | nonstd::skip_last) {
-        c.size = (uint32_t)(c.ratio * (double)total_size);
+        c.size = (std::uint32_t)(c.ratio * (double)total_size);
         size_left -= c.size;
     }
 
@@ -569,8 +569,8 @@ OwnedNode SplitNode::remove_child_at(SplitChildIter child) {
     if (children.empty()) {
         active_child = 0;
     } else {
-        active_child = std::clamp(active_child, (uint32_t)0,
-                                  (uint32_t)(children.size() - 1));
+        active_child = std::clamp(active_child, (std::uint32_t)0,
+                                  (std::uint32_t)(children.size() - 1));
     }
 
     if (!children.empty()) {
@@ -987,11 +987,11 @@ void SplitNode::set_geometry(const wf::geometry_t geo) {
     switch (split_type) {
     case SplitType::VSPLIT:
     case SplitType::HSPLIT: {
-        const uint32_t size =
+        const std::uint32_t size =
             split_type == SplitType::VSPLIT ? inner.width : inner.height;
 
         {
-            uint32_t total_children_size = 0;
+            std::uint32_t total_children_size = 0;
             for (auto &c : children)
                 total_children_size += c.size;
 
@@ -1020,7 +1020,7 @@ void SplitNode::set_geometry(const wf::geometry_t geo) {
         }
 
         assert("Children sizes should add up to total size." &&
-               (uint32_t)offset == size);
+               (std::uint32_t)offset == size);
 
         break;
     }
@@ -1116,8 +1116,9 @@ OwnedNode Workspace::remove_floating_node(Node node, bool reset_active) {
     if (floating_nodes.empty())
         active_floating = 0;
     else
-        active_floating = std::clamp(active_floating, (uint32_t)0,
-                                     (uint32_t)(floating_nodes.size() - 1));
+        active_floating =
+            std::clamp(active_floating, (std::uint32_t)0,
+                       (std::uint32_t)(floating_nodes.size() - 1));
 
     if (reset_active && node.get() == active_node.get())
         reset_active_node();
@@ -1480,11 +1481,11 @@ void Workspaces::update_dims(wf::dimensions_t ndims, wf::geometry_t geo,
 
     auto x = 0;
     for (auto &col : workspaces) {
-        if (col.size() == (uint32_t)ndims.height) {
+        if (col.size() == (std::uint32_t)ndims.height) {
             // noop
-        } else if (col.size() < (uint32_t)ndims.height) {
+        } else if (col.size() < (std::uint32_t)ndims.height) {
             col.reserve(ndims.height);
-            for (int32_t y = col.size(); y < ndims.height; y++) {
+            for (std::int32_t y = col.size(); y < ndims.height; y++) {
                 col.push_back(std::unique_ptr<Workspace>(
                     new Workspace({x, y}, geo, plugin)));
             }

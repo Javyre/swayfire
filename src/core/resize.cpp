@@ -3,23 +3,24 @@
 
 // INode
 
-wf::dimensions_t INode::try_resize(wf::dimensions_t ndims, uint32_t edges) {
+wf::dimensions_t INode::try_resize(wf::dimensions_t ndims,
+                                   std::uint32_t edges) {
     return parent->try_resize_child(this, ndims, edges);
 }
 
 // SplitNode
 
-int32_t SplitNode::try_move_front_edge(SplitChildIter child, int32_t delta,
+int32_t SplitNode::try_move_front_edge(SplitChildIter child, std::int32_t delta,
                                        bool use_preferred_sizes) {
     return try_move_edge(child, delta, true, use_preferred_sizes);
 }
 
-int32_t SplitNode::try_move_back_edge(SplitChildIter child, int32_t delta,
+int32_t SplitNode::try_move_back_edge(SplitChildIter child, std::int32_t delta,
                                       bool use_preferred_sizes) {
     return try_move_edge(child, delta, false, use_preferred_sizes);
 }
 
-int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
+int32_t SplitNode::try_move_edge(SplitChildIter child, std::int32_t delta,
                                  bool front, bool use_prefered_sizes) {
     switch (split_type) {
     case SplitType::TABBED:
@@ -42,21 +43,21 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
 
     if (outer_edge) {
         const auto geo = get_geometry();
-        const int32_t size =
+        const std::int32_t size =
             (split_type == SplitType::VSPLIT) ? geo.width : geo.height;
 
-        int32_t delta_size = delta * (front ? -1 : 1);
+        std::int32_t delta_size = delta * (front ? -1 : 1);
 
         if (use_prefered_sizes) {
-            const int32_t pref_size = (split_type == SplitType::VSPLIT)
-                                          ? preferred_size.value().width
-                                          : preferred_size.value().height;
+            const std::int32_t pref_size = (split_type == SplitType::VSPLIT)
+                                               ? preferred_size.value().width
+                                               : preferred_size.value().height;
 
             delta_size = std::max(size + delta_size, pref_size) - size;
         }
 
         delta_size = std::max(size + delta_size,
-                              (int32_t)children.size() * MIN_VIEW_SIZE) -
+                              (std::int32_t)children.size() * MIN_VIEW_SIZE) -
                      size;
 
         if (delta_size == 0)
@@ -72,7 +73,7 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
                               ? (front ? WLR_EDGE_LEFT : WLR_EDGE_RIGHT)
                               : (front ? WLR_EDGE_TOP : WLR_EDGE_BOTTOM);
 
-        const int32_t new_size =
+        const std::int32_t new_size =
             split_type == SplitType::VSPLIT
                 ? parent->try_resize_child(this, dims, edge).width
                 : parent->try_resize_child(this, dims, edge).height;
@@ -85,9 +86,9 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
                 if (delta_size == 0)
                     return true;
 
-                int32_t old_csize = c.size;
-                c.size =
-                    (uint32_t)std::max(MIN_VIEW_SIZE, old_csize + delta_size);
+                std::int32_t old_csize = c.size;
+                c.size = (std::uint32_t)std::max(MIN_VIEW_SIZE,
+                                                 old_csize + delta_size);
                 delta_size -= c.size - old_csize;
                 return false;
             };
@@ -107,14 +108,14 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
 
         return delta_size * (front ? -1 : 1);
     } else {
-        int32_t delta_child_size = delta * (front ? -1 : 1);
+        std::int32_t delta_child_size = delta * (front ? -1 : 1);
 
         const auto other = child + (front ? -1 : 1);
-        const int32_t child_size = child->size;
-        const int32_t other_size = other->size;
+        const std::int32_t child_size = child->size;
+        const std::int32_t other_size = other->size;
 
         if (use_prefered_sizes) {
-            const int32_t pref =
+            const std::int32_t pref =
                 split_type == SplitType::VSPLIT
                     ? other->node->preferred_size.value().width
                     : other->node->preferred_size.value().height;
@@ -139,7 +140,7 @@ int32_t SplitNode::try_move_edge(SplitChildIter child, int32_t delta,
 }
 
 wf::dimensions_t SplitNode::try_resize_child(Node node, wf::dimensions_t ndims,
-                                             uint32_t edges) {
+                                             std::uint32_t edges) {
     // Forward iterator starting at child.
     auto child = find_child(node);
     if (child == children.end())
@@ -243,7 +244,7 @@ wf::dimensions_t SplitNode::try_resize_child(Node node, wf::dimensions_t ndims,
 // Workspace
 
 wf::dimensions_t Workspace::try_resize_child(Node child, wf::dimensions_t ndims,
-                                             uint32_t edges) {
+                                             std::uint32_t edges) {
     if (child->get_floating()) {
         auto ngeo = child->get_geometry();
 

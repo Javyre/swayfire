@@ -103,7 +103,7 @@ void DecorationSurface::recalculate_region() {
     cached_region = BorderSubSurf::calculate_region(get_border_spec());
 }
 
-bool DecorationSurface::accepts_input(int32_t sx, int32_t sy) {
+bool DecorationSurface::accepts_input(std::int32_t sx, std::int32_t sy) {
     return BorderSubSurf::contains_point(get_border_spec(), {sx, sy});
 }
 
@@ -333,7 +333,7 @@ wf::dimensions_t SplitDecoration::get_size() const {
     return wf::dimensions(geometry);
 }
 
-bool SplitDecoration::accepts_input(int32_t sx, int32_t sy) {
+bool SplitDecoration::accepts_input(std::int32_t sx, std::int32_t sy) {
     bool r = false;
 
     with_tabs_spec([&](const auto &tab, const auto spec) {

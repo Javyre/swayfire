@@ -26,7 +26,7 @@ IActiveGrab::~IActiveGrab() {
 
 // IActiveButtonDrag
 
-void IActiveButtonDrag::button(uint32_t b, uint32_t state) {
+void IActiveButtonDrag::button(std::uint32_t b, std::uint32_t state) {
     if (b == deactivate_button && state == WLR_BUTTON_RELEASED) {
         plugin->active_grab = nullptr;
     }
@@ -34,7 +34,7 @@ void IActiveButtonDrag::button(uint32_t b, uint32_t state) {
 
 // ActiveMove
 
-void ActiveMove::pointer_motion(uint32_t x, uint32_t y) {
+void ActiveMove::pointer_motion(std::uint32_t x, std::uint32_t y) {
     auto geo = original_geo;
     geo.x += (int)x - pointer_start.x;
     geo.y += (int)y - pointer_start.y;
@@ -60,13 +60,13 @@ ActiveMove::construct(nonstd::observer_ptr<Swayfire> plugin, Node dragged) {
 // ActiveResize
 
 constexpr double RESIZE_MARGIN = 0.35;
-uint32_t resize_calc_resizing_edges(wf::geometry_t geo, wf::point_t p) {
+std::uint32_t resize_calc_resizing_edges(wf::geometry_t geo, wf::point_t p) {
     if (!(geo & p)) {
         LOGE("Point not in geometry. Cannot calculate resizing egdes.");
         return WLR_EDGE_NONE;
     }
 
-    uint32_t edges = WLR_EDGE_NONE;
+    std::uint32_t edges = WLR_EDGE_NONE;
 
     auto vert_margin = (int)((double)geo.height * RESIZE_MARGIN);
     auto hori_margin = (int)((double)geo.width * RESIZE_MARGIN);
@@ -97,7 +97,7 @@ uint32_t resize_calc_resizing_edges(wf::geometry_t geo, wf::point_t p) {
 }
 #undef RESIZE_MARGIN
 
-void ActiveResize::pointer_motion(uint32_t x, uint32_t y) {
+void ActiveResize::pointer_motion(std::uint32_t x, std::uint32_t y) {
     const int dw = (int)x - pointer_start.x;
     const int dh = (int)y - pointer_start.y;
 
@@ -162,21 +162,23 @@ void Swayfire::init_grab_interface() {
     grab_interface->capabilities =
         wf::CAPABILITY_GRAB_INPUT | wf::CAPABILITY_MANAGE_DESKTOP;
 
-    grab_interface->callbacks.pointer.motion = [&](uint32_t x, uint32_t y) {
+    grab_interface->callbacks.pointer.motion = [&](std::uint32_t x,
+                                                   std::uint32_t y) {
         if (active_grab)
             active_grab->pointer_motion(x, y);
     };
 
-    grab_interface->callbacks.pointer.button = [&](uint32_t b, uint32_t state) {
+    grab_interface->callbacks.pointer.button = [&](std::uint32_t b,
+                                                   std::uint32_t state) {
         if (active_grab)
             active_grab->button(b, state);
     };
 
-    grab_interface->callbacks.touch.motion = [&](int32_t id, int32_t x,
-                                                 int32_t y) {
-        if (active_grab && id == 1)
-            active_grab->pointer_motion(x, y);
-    };
+    grab_interface->callbacks.touch.motion =
+        [&](std::int32_t id, std::int32_t x, std::int32_t y) {
+            if (active_grab && id == 1)
+                active_grab->pointer_motion(x, y);
+        };
 
     on_move_activate = [&](auto) {
         if (auto view = wf::get_core().get_cursor_focus_view()) {

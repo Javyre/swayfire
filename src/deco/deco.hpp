@@ -162,7 +162,7 @@ class DecorationSurface final : public wf::compositor_surface_t,
     bool is_mapped() const override;
     wf::point_t get_offset() override;
     wf::dimensions_t get_size() const override;
-    bool accepts_input(int32_t sx, int32_t sy) override;
+    bool accepts_input(std::int32_t sx, std::int32_t sy) override;
     void simple_render(const wf::framebuffer_t &fb, int x, int y,
                        const wf::region_t &damage) override;
 };
@@ -502,7 +502,7 @@ class SplitDecoration final : public wf::view_interface_t,
     // == Impl wf::surface_interface_t ==
     bool is_mapped() const override;
     wf::dimensions_t get_size() const override;
-    bool accepts_input(int32_t sx, int32_t sy) override;
+    bool accepts_input(std::int32_t sx, std::int32_t sy) override;
     void simple_render(const wf::framebuffer_t &fb, int x, int y,
                        const wf::region_t &damage) override;
 

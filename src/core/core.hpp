@@ -23,8 +23,8 @@
 
 #include "signals.hpp"
 
-constexpr uint32_t FLOATING_MOVE_STEP = 5;
-constexpr int32_t MIN_VIEW_SIZE = 20;
+constexpr std::uint32_t FLOATING_MOVE_STEP = 5;
+constexpr std::int32_t MIN_VIEW_SIZE = 20;
 
 using OutputRef = nonstd::observer_ptr<wf::output_t>;
 
@@ -49,19 +49,19 @@ wf::dimensions_t min(const wf::dimensions_t &a, const wf::dimensions_t &b);
 /// Apply std::max on both components of the two dimensions independently.
 wf::dimensions_t max(const wf::dimensions_t &a, const wf::dimensions_t &b);
 
-constexpr uint32_t ALL_EDGES =
+constexpr std::uint32_t ALL_EDGES =
     (WLR_EDGE_LEFT | WLR_EDGE_RIGHT | WLR_EDGE_TOP | WLR_EDGE_BOTTOM);
 
 } // namespace nonwf
 
-enum struct SplitType : uint8_t {
+enum struct SplitType : std::uint8_t {
     VSPLIT,
     HSPLIT,
     TABBED,
     STACKED,
 };
 
-enum struct Direction : uint8_t {
+enum struct Direction : std::uint8_t {
     UP,
     DOWN,
     LEFT,
@@ -162,8 +162,9 @@ class INodeParent : public virtual IDisplay {
     /// cannot contain the new dimensions.
     ///
     /// \return the new dimensions after this call.
-    virtual wf::dimensions_t
-    try_resize_child(Node child, wf::dimensions_t ndims, uint32_t edges) = 0;
+    virtual wf::dimensions_t try_resize_child(Node child,
+                                              wf::dimensions_t ndims,
+                                              std::uint32_t edges) = 0;
 
     /// Get the deepest last active child node.
     ///
@@ -375,7 +376,8 @@ class INode : public virtual IDisplay, public wf::object_base_t {
     /// applied.
     ///
     /// \return the new dimensions after this call.
-    virtual wf::dimensions_t try_resize(wf::dimensions_t ndims, uint32_t edges);
+    virtual wf::dimensions_t try_resize(wf::dimensions_t ndims,
+                                        std::uint32_t edges);
 
     /// Begin a continuous resize on this node and its children.
     virtual void begin_resize() {
@@ -518,7 +520,7 @@ class ViewNode final : public INode {
     ///
     /// We temporarily disable handling the geo change event to not react to our
     /// own set_geometry_calls.
-    uint32_t disable_on_geometry_changed = 0;
+    std::uint32_t disable_on_geometry_changed = 0;
 
     /// Disable reacting to view geometry_changed events.
     void push_disable_on_geometry_changed() { disable_on_geometry_changed++; }
@@ -613,9 +615,9 @@ inline SplitNodeRef get_signaled_split_node(wf::signal_data_t *data) {
 /// order to make window resizes more stable since using ratios in a continuos
 /// resize motion is jumpy as the double gets rounded to pixel amounts.
 struct SplitChild {
-    uint32_t size;  ///< The size of the child.
-    double ratio;   ///< The size ratio of child.
-    OwnedNode node; ///< A direct child node of the split.
+    std::uint32_t size; ///< The size of the child.
+    double ratio;       ///< The size ratio of child.
+    OwnedNode node;     ///< A direct child node of the split.
 };
 
 using SplitChildIter = std::vector<SplitChild>::iterator;
@@ -624,7 +626,7 @@ using SplitChildIter = std::vector<SplitChild>::iterator;
 class SplitNode final : public INode, public INodeParent {
   private:
     SplitType split_type;             ///< The split type of this node.
-    uint32_t active_child = 0;        ///< Index of last active child.
+    std::uint32_t active_child = 0;   ///< Index of last active child.
     std::vector<SplitChild> children; ///< The direct children nodes.
 
     /// Find a direct child of this parent node.
@@ -652,22 +654,24 @@ class SplitNode final : public INode, public INodeParent {
     /// of pixels.
     ///
     /// \return the delta actually applied on the edge.
-    int32_t try_move_edge(SplitChildIter child, int32_t delta, bool front,
-                          bool use_preferred_sizes = false);
+    std::int32_t try_move_edge(SplitChildIter child, std::int32_t delta,
+                               bool front, bool use_preferred_sizes = false);
 
     /// Try to move the edge at the front of a child by the given amount
     /// of pixels.
     ///
     /// \return the delta actually applied on the edge.
-    inline int32_t try_move_front_edge(SplitChildIter child, int32_t delta,
-                                       bool use_preferred_sizes = false);
+    inline std::int32_t try_move_front_edge(SplitChildIter child,
+                                            std::int32_t delta,
+                                            bool use_preferred_sizes = false);
 
     /// Try to move the edge at the back of a child by the given amount
     /// of pixels.
     ///
     /// \return the delta actually applied on the edge.
-    inline int32_t try_move_back_edge(SplitChildIter child, int32_t delta,
-                                      bool use_preferred_sizes = false);
+    inline std::int32_t try_move_back_edge(SplitChildIter child,
+                                           std::int32_t delta,
+                                           bool use_preferred_sizes = false);
 
   public:
     /// The last orientation of the split. (From last time it was a split and
@@ -744,7 +748,7 @@ class SplitNode final : public INode, public INodeParent {
     Node get_adjacent(Node node, Direction dir) override;
     bool move_child(Node node, Direction dir) override;
     wf::dimensions_t try_resize_child(Node child, wf::dimensions_t ndims,
-                                      uint32_t edges) override;
+                                      std::uint32_t edges) override;
     Node get_last_active_node() override;
     void insert_child(OwnedNode node) override;
     OwnedNode remove_child(Node node) override;
@@ -821,7 +825,7 @@ class Workspace final : public INodeParent {
     Node active_node = nullptr;
 
     /// The last active floating node index.
-    uint32_t active_floating = 0;
+    std::uint32_t active_floating = 0;
 
     /// Find a floating child of this ws.
     FloatingNodeIter find_floating(Node node);
@@ -915,7 +919,7 @@ class Workspace final : public INodeParent {
     Node get_adjacent(Node node, Direction dir) override;
     bool move_child(Node node, Direction dir) override;
     wf::dimensions_t try_resize_child(Node child, wf::dimensions_t ndims,
-                                      uint32_t edges) override;
+                                      std::uint32_t edges) override;
     Node get_last_active_node() override;
     void insert_child(OwnedNode node) override;
     OwnedNode remove_child(Node node) override;
