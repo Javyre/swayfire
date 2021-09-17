@@ -301,26 +301,6 @@ void ViewNode::on_geometry_changed_impl() {
                 view->get_wm_geometry(), curr_wsid, get_ws()->wsid,
                 get_ws()->output);
             set_geometry(expand_geometry(ngeo));
-        } else if (!find_floating_parent()) {
-            // With a normal tiled node, it should be impossible for it to not
-            // be in the same workspace as the rest of the tree. So we correct
-            // it here.
-
-            // NOTE: We don't do anything if we are part of a floating tree
-            // since it is actually possible for a member of a floating tree to
-            // overflow into a different workspace.
-
-            const auto new_ws =
-                get_ws()->plugin->get_view_workspace(view, false);
-
-            if (new_ws->wsid == get_ws()->wsid)
-                return;
-
-            LOGD(this, ": moving from ", get_ws(), " to ", new_ws);
-
-            auto const old_ws = get_ws();
-            auto owned_self = old_ws->remove_tiled_node(this);
-            new_ws->insert_tiled_node(std::move(owned_self));
         }
     }
 }
@@ -1557,11 +1537,13 @@ void Swayfire::bind_signals() {
     output->connect_signal("view-tile-request", &on_view_tile_request);
     output->connect_signal("view-layer-attached", &on_view_attached);
     output->connect_signal("view-minimize-request", &on_view_minimized);
+    output->connect_signal("view-change-viewport", &on_view_change_viewport);
     output->connect_signal("workspace-changed", &on_workspace_changed);
 }
 
 void Swayfire::unbind_signals() {
     output->disconnect_signal(&on_workspace_changed);
+    output->disconnect_signal(&on_view_change_viewport);
     output->disconnect_signal(&on_view_minimized);
     output->disconnect_signal(&on_view_attached);
     output->disconnect_signal(&on_view_tile_request);

@@ -1093,9 +1093,6 @@ class Swayfire final : public wf::plugin_interface_t {
             if (!node->parent)
                 return;
 
-            correct_view_workspace(node,
-                                   output->workspace->get_current_workspace());
-
             node->set_active();
         }
     };
@@ -1177,6 +1174,30 @@ class Swayfire final : public wf::plugin_interface_t {
             on_view_attached.emit(data);
         }
     };
+
+    /// Handle views changing viewport.
+    wf::signal_connection_t on_view_change_viewport =
+        [&](wf::signal_data_t *data_) {
+            const auto data =
+                dynamic_cast<wf::view_change_viewport_signal *>(data_);
+            if (const auto view_node = get_view_node(data->view)) {
+                if (const auto floating = view_node->find_floating_parent()) {
+                    // NOTE: We don't do anything if we are part of a floating
+                    // tree since it is actually possible for a member of a
+                    // floating tree to overflow into a different workspace.
+                    (void)0;
+                } else {
+                    // With a normal tiled node though, it should be impossible
+                    // for it to not be in the same workspace as the rest of the
+                    // tree. So we correct it here.
+
+                    auto from = view_node->get_ws();
+                    if (data->to != from->wsid)
+                        workspaces.get(data->to)->insert_tiled_node(
+                            from->remove_tiled_node(view_node));
+                }
+            }
+        };
 
     /// Handle active workspace changing.
     wf::signal_connection_t on_workspace_changed =
