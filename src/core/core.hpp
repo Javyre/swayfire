@@ -531,6 +531,9 @@ class ViewNode final : public INode {
         disable_on_geometry_changed--;
     }
 
+    /// Whether the node is fullscreened.
+    bool fullscreen = false;
+
   public:
     /// The wayfire view corresponding to this node.
     wayfire_view view;
@@ -555,6 +558,12 @@ class ViewNode final : public INode {
 
     /// Set the prefered_split_type of this view node.
     void set_prefered_split_type(std::optional<SplitType> split_type);
+
+    /// Get whether the node is fullscreened.
+    bool is_fullscreen() { return fullscreen; }
+
+    /// Set whether the node is fullscreened.
+    void set_fullscreen(bool f) { fullscreen = f; }
 
     // == INode impl ==
 
@@ -1101,6 +1110,9 @@ class Swayfire final : public wf::plugin_interface_t {
                 assert(!fr_data->carried_out);
                 fr_data->carried_out = true;
 
+                if (fr_data->state == node->is_fullscreen())
+                    return;
+
                 // FIXME: ignoring target workspace
 
                 if (fr_data->state) {
@@ -1116,6 +1128,7 @@ class Swayfire final : public wf::plugin_interface_t {
                     else
                         node->refresh_geometry();
                 }
+                node->set_fullscreen(fr_data->state);
 
                 return;
             }
