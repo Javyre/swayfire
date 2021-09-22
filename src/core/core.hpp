@@ -1175,11 +1175,11 @@ class Swayfire final : public wf::plugin_interface_t {
         }
     };
 
-    /// Handle views changing viewport.
-    wf::signal_connection_t on_view_change_viewport =
+    /// Handle views changing workspace.
+    wf::signal_connection_t on_view_change_workspace =
         [&](wf::signal_data_t *data_) {
             const auto data =
-                dynamic_cast<wf::view_change_viewport_signal *>(data_);
+                dynamic_cast<wf::view_change_workspace_signal *>(data_);
             if (const auto view_node = get_view_node(data->view)) {
                 if (const auto floating = view_node->find_floating_parent()) {
                     // NOTE: We don't do anything if we are part of a floating
