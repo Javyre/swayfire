@@ -5,82 +5,82 @@
 	<_long>Tiling window manager inspired by Sway</_long>
 	<category>Window Management</category>
 
-    <option name="key_toggle_split_direction" type="key">
+    <option name="toggle_split_direction" type="activator">
         <_short>Toggle split direction</_short>
         <_long>Toggle split direction</_long>
         <default>&lt;super&gt; KEY_E</default>
     </option>
-    <option name="key_set_tabbed" type="key">
+    <option name="set_tabbed" type="activator">
         <_short>Set layout to tabbed</_short>
         <_long>Set layout to tabbed</_long>
         <default>&lt;super&gt; KEY_W</default>
     </option>
-    <option name="key_set_stacked" type="key">
+    <option name="set_stacked" type="activator">
         <_short>Set layout to stacked</_short>
         <_long>Set layout to stacked</_long>
         <default>&lt;super&gt; KEY_S</default>
     </option>
 
-    <option name="key_set_want_vsplit" type="key">
+    <option name="set_want_vsplit" type="activator">
         <_short>Set vertical split preference</_short>
         <_long>Set the split direction preference of the current window to vertical</_long>
         <default>&lt;super&gt; KEY_V</default>
     </option>
-    <option name="key_set_want_hsplit" type="key">
+    <option name="set_want_hsplit" type="activator">
         <_short>Set horizontal split preference</_short>
         <_long>Set the split direction preference of the current window to horizontal</_long>
         <default>&lt;super&gt; KEY_B</default>
     </option>
 
-    <option name="key_focus_left" type="key">
+    <option name="focus_left" type="activator">
         <_short>Focus node to the left of active</_short>
         <_long>Focus node to the left of active</_long>
         <default>&lt;super&gt; KEY_H</default>
     </option>
-    <option name="key_focus_right" type="key">
+    <option name="focus_right" type="activator">
         <_short>Focus node to the right of active</_short>
         <_long>Focus node to the right of active</_long>
         <default>&lt;super&gt; KEY_L</default>
     </option>
-    <option name="key_focus_down" type="key">
+    <option name="focus_down" type="activator">
         <_short>Focus node below active</_short>
         <_long>Focus node below active</_long>
         <default>&lt;super&gt; KEY_J</default>
     </option>
-    <option name="key_focus_up" type="key">
+    <option name="focus_up" type="activator">
         <_short>Focus node above active</_short>
         <_long>Focus node above active</_long>
         <default>&lt;super&gt; KEY_K</default>
     </option>
 
-    <option name="key_toggle_focus_tile" type="key">
+    <option name="toggle_focus_tile" type="activator">
         <_short>Toggle focus between tiled and floating windows</_short>
         <_long>Toggle focus between tiled and floating windows</_long>
         <default>&lt;super&gt; KEY_SPACE</default>
     </option>
 
-    <option name="key_move_left" type="key">
+    <option name="move_left" type="activator">
         <_short>Move node to the left</_short>
         <_long>Move node to the left</_long>
         <default>&lt;super&gt; &lt;shift&gt; KEY_H</default>
     </option>
-    <option name="key_move_right" type="key">
+    <option name="move_right" type="activator">
         <_short>Move node to the right</_short>
         <_long>Move node to the right</_long>
         <default>&lt;super&gt; &lt;shift&gt; KEY_L</default>
     </option>
-    <option name="key_move_down" type="key">
+    <option name="move_down" type="activator">
         <_short>Move node below downwards</_short>
         <_long>Move node below downwards</_long>
         <default>&lt;super&gt; &lt;shift&gt; KEY_J</default>
     </option>
-    <option name="key_move_up" type="key">
+    <option name="move_up" type="activator">
         <_short>Move node upwards</_short>
         <_long>Move node upwards</_long>
         <default>&lt;super&gt; &lt;shift&gt; KEY_K</default>
     </option>
 
-    <option name="key_toggle_tile" type="key">
+    <option name="toggle_tile" type="activator">
         <_short>Toggle tile</_short>
         <_long>Toggle tiling current window</_long>
         <default>&lt;super&gt; &lt;shift&gt; KEY_SPACE</default>

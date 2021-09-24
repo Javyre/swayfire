@@ -1576,7 +1576,7 @@ void Swayfire::init() {
     init_grab_interface();
 
     bind_signals();
-    bind_keys();
+    bind_activators();
 
     output->store_data(std::make_unique<SwayfireCustomData>(this),
                        "swayfire-core");
@@ -1589,7 +1589,7 @@ void Swayfire::fini() {
 
     LOGD("==== fini ====");
 
-    unbind_keys();
+    unbind_activators();
     unbind_signals();
 
     fini_grab_interface();

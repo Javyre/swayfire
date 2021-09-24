@@ -999,8 +999,8 @@ class Swayfire final : public wf::plugin_interface_t {
     Workspaces workspaces;
 
   private:
-    /// Stores all the key callbacks bound.
-    std::vector<std::unique_ptr<wf::key_callback>> key_callbacks;
+    /// Stores all the activator callbacks bound.
+    std::vector<std::unique_ptr<wf::activator_callback>> activator_callbacks;
 
     /// The current active gesture grab.
     std::unique_ptr<IActiveGrab> active_grab;
@@ -1011,11 +1011,11 @@ class Swayfire final : public wf::plugin_interface_t {
     /// Unbind all signal handlers bound.
     void unbind_signals();
 
-    /// Bind all key callbacks needed.
-    void bind_keys();
+    /// Bind all activator callbacks needed.
+    void bind_activators();
 
-    /// Unbind all key callbacks bound.
-    void unbind_keys();
+    /// Unbind all activator callbacks bound.
+    void unbind_activators();
 
     /// Make a new view_node corresponding to the given view.
     std::unique_ptr<ViewNode> init_view_node(wayfire_view view);
@@ -1042,31 +1042,32 @@ class Swayfire final : public wf::plugin_interface_t {
     /// Move the active node in the given direction.
     bool move_direction(Direction dir);
 
-#define DECL_KEY(NAME)                                                         \
-    wf::option_wrapper_t<wf::keybinding_t> key_##NAME{"swayfire/key_" #NAME};  \
-    bool on_##NAME(wf::keybinding_t);
+#define DECL_ACTIVATOR(NAME)                                                   \
+    wf::option_wrapper_t<wf::activatorbinding_t> key_##NAME{                   \
+        "swayfire/" #NAME};                                                    \
+    bool on_##NAME(const wf::activator_data_t &);
 
-    DECL_KEY(toggle_split_direction);
-    DECL_KEY(set_tabbed);
-    DECL_KEY(set_stacked);
+    DECL_ACTIVATOR(toggle_split_direction);
+    DECL_ACTIVATOR(set_tabbed);
+    DECL_ACTIVATOR(set_stacked);
 
-    DECL_KEY(set_want_vsplit);
-    DECL_KEY(set_want_hsplit);
+    DECL_ACTIVATOR(set_want_vsplit);
+    DECL_ACTIVATOR(set_want_hsplit);
 
-    DECL_KEY(focus_left);
-    DECL_KEY(focus_right);
-    DECL_KEY(focus_down);
-    DECL_KEY(focus_up);
+    DECL_ACTIVATOR(focus_left);
+    DECL_ACTIVATOR(focus_right);
+    DECL_ACTIVATOR(focus_down);
+    DECL_ACTIVATOR(focus_up);
 
-    DECL_KEY(toggle_focus_tile);
+    DECL_ACTIVATOR(toggle_focus_tile);
 
-    DECL_KEY(move_left);
-    DECL_KEY(move_right);
-    DECL_KEY(move_down);
-    DECL_KEY(move_up);
+    DECL_ACTIVATOR(move_left);
+    DECL_ACTIVATOR(move_right);
+    DECL_ACTIVATOR(move_down);
+    DECL_ACTIVATOR(move_up);
 
-    DECL_KEY(toggle_tile);
-#undef DECL_KEY
+    DECL_ACTIVATOR(toggle_tile);
+#undef DECL_ACTIVATOR
 
     wf::option_wrapper_t<wf::buttonbinding_t> button_move_activate{
         "swayfire/button_move_activate"};
