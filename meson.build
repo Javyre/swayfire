@@ -13,7 +13,7 @@ project(
 	],
 )
 
-wayfire = dependency('wayfire')
+wayfire = dependency('wayfire', version: '>=0.8.0')
 wlroots = dependency('wlroots')
 wfconfig = dependency('wf-config')
 cairo = dependency('cairo')
