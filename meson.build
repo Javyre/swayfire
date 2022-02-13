@@ -24,7 +24,7 @@ add_project_arguments(['-DWAYFIRE_PLUGIN'], language: ['cpp', 'c'])
 add_project_link_arguments(['-rdynamic'], language:'cpp')
 
 resource_dir = join_paths(get_option('prefix'), 'share', 'wayfire')
-metadata_dir = join_paths(resource_dir, 'metadata', 'swayfire')
+metadata_dir = join_paths(resource_dir, 'metadata')
 
 all_src = []
 
