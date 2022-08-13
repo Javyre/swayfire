@@ -13,9 +13,9 @@ project(
 	],
 )
 
-wayfire = dependency('wayfire', version: '>=0.8.0')
+wayfire = dependency('wayfire')
 wlroots = dependency('wlroots')
-wfconfig = dependency('wf-config')
+wfconfig = dependency('wf-config', version: '>=0.8.0')
 cairo = dependency('cairo')
 pixman = dependency('pixman-1')
 
